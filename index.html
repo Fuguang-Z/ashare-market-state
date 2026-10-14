@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>A股市场状态</title>
+  <style>
+    :root{--bg:#f4f6f9;--fg:#233044;--muted:#627084;--card:#fff;--line:#d9dfe7;--accent:#2458a6}
+    @media (prefers-color-scheme:dark){:root{--bg:#12161c;--fg:#e3e8ef;--muted:#98a3b3;--card:#1b2129;--line:#2c3540;--accent:#6c9be0}}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,"Microsoft YaHei",sans-serif}
+    main{max-width:640px;margin:12vh auto;padding:0 16px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:28px}
+    h1{margin:0 0 8px;font-size:24px}p{color:var(--muted);line-height:1.7}
+    a{color:var(--accent)}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>A股市场状态</h1>
+      <p>判定页面建设中：主升（大/小）· 震荡 · 主跌。</p>
+      <p>当前可用：<a href="./probe.html">数据源探测页</a>（仅用于测试公开行情接口，不构成任何投资建议）。</p>
+    </div>
+  </main>
+</body>
+</html>
