@@ -2,8 +2,8 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261015m';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015m';
+import ds from './datasource.js?v=20261015n';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015n';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -293,7 +293,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.15m';
+const APP_VERSION = '2026.10.15n';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -350,7 +350,7 @@ function condGroups(f) {
     ] },
     { key: 'ref', title: '参考', items: [
       [f.panic, '恐慌盘出现（见底区提示）', '恐慌盘', isNum(f.dn) && isNum(f.rsi) ? `跌停 ${f.dn} 家，全指 RSI12 ${f.rsi.toFixed(1)}` : '未知'],
-      [isNum(f.rsi) ? f.rsi < 30 : null, '指数超跌', '指数超跌', isNum(f.rsi) ? `中证全指 RSI12 ${f.rsi.toFixed(1)}（${rsiZone(f.rsi)}；<30 超跌，>70 超买）` : '未知'],
+      [isNum(f.rsi) ? f.rsi < 30 : null, '指数超跌', '指数超跌', isNum(f.rsi) ? `中证全指 RSI12 ${f.rsi.toFixed(1)}（${rsiZone(f.rsi)}${isNum(rsiStreak()) ? ` 连续 ${rsiStreak()} 天` : ''}；<30 超跌，>70 超买）` : '未知'],
       [isNum(f.brokenRate) ? f.brokenRate >= P.EXIT_BROKEN_RATE : null, '炸板率 ≥ 50%（情绪退潮）', '炸板≥50%', isNum(f.brokenRate) ? `炸板率 ${(f.brokenRate * 100).toFixed(0)}%` : '未知'],
     ] },
   ];
@@ -397,7 +397,16 @@ function mainBoards(f) {
   return { role: '主流板块', rows: [] };
 }
 
-const rsiZone = v => (v < 30 ? '超跌' : v > 70 ? '超买' : '中性');
+const rsiZone = v => (v < 30 ? '超跌' : v > 70 ? '超买' : '正常');
+/** RSI 当前区域（超跌 / 正常 / 超买）已连续几个交易日（含今天的盘中值）。 */
+function rsiStreak() {
+  const arr = S.result?.H?.rsi ?? [];
+  let k = arr.length - 1; while (k >= 0 && !isNum(arr[k])) k--;
+  if (k < 0) return null;
+  const zone = rsiZone(arr[k]); let n = 0;
+  for (; k >= 0 && isNum(arr[k]) && rsiZone(arr[k]) === zone; k--) n++;
+  return n;
+}
 /** 行情连接状态：按指数报价的来源时间判断新鲜度；午休、盘前盘后、休市单独标注。 */
 function connState() {
   const c = S.calendar, q = S.today.quotes;
@@ -433,7 +442,7 @@ function heroHTML(f) {
       ${kpi('上证指数', isNum(f.close) ? `${f.close.toFixed(2)} <small class="${sign(f.p1)}">${fmtPct(f.p1)}</small>` : '—', '')}
       ${kpi(r.todayAppended && S.today.amtSource ? `全天量能（${S.today.amtSource.replace('全天', '')}）` : '成交额', isNum(f.amt) ? `${fmtYi(f.amt).replace(' ', '')} <small>×${isNum(f.vr) ? f.vr.toFixed(2) : '—'}</small>` : '—', '',
         r.todayAppended ? (isNum(vsY) ? `较昨日 <span class="${sign(vsY)}">${fmtPct(vsY, 1)}</span>` : '较昨日 —') : '')}
-      ${kpi('全指 RSI12', isNum(f.rsi) ? `${f.rsi.toFixed(1)} <small>${rsiZone(f.rsi)}</small>` : '—', isNum(f.rsi) && f.rsi < 30 ? 'g' : isNum(f.rsi) && f.rsi > 70 ? 'r' : '', '（&lt;30 超跌 · &gt;70 超买）')}
+      ${kpi('全指 RSI12', isNum(f.rsi) ? `${f.rsi.toFixed(1)} <small>${rsiZone(f.rsi)}${isNum(rsiStreak()) ? `（连续 ${rsiStreak()} 天）` : ''}</small>` : '—', isNum(f.rsi) && f.rsi < 30 ? 'g' : isNum(f.rsi) && f.rsi > 70 ? 'r' : '', '（&lt;30 超跌 · &gt;70 超买）')}
     </div>
     <div class="steps" title="二次探底进度">${steps}</div>
     <div class="steps-lab">${F1_STEPS.map(s => `<span>${s}</span>`).join('')}</div>
