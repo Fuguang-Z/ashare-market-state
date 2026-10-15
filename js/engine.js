@@ -9,7 +9,7 @@ export const PARAMS = Object.freeze({
   FAM_TOP: 6, FAM_MIN_IN_TOP: 2, FAM_MIN_IN_TOP5D: 3, FAM_5D_UP: 5.0, FAM_5D_DOWN: -6.0,
   OS_RSI: 35, PANIC_DOWN: 70, PANIC_RSI: 30,
   H_MIN: 5, LOSS_DOWN: 15, RETREAT_DOWN: 30, LAD3_MIN: 3, EXIT_H_DROP: 3, EXIT_LAD3_MAX: 2, EXIT_BROKEN_RATE: 0.5,
-  RISK_NEED: 2, F1_LOOKBACK: 40, WARMUP: 20,
+  RISK_NEED: 2, F1_LOOKBACK: 40, WARMUP: 20, CYCLE_WINDOW: 40, CYCLE_VOID: 5, THEME_MIN: 10,
 });
 
 /** 主题族群（同花顺原生板块代码）；顺序即平局时的优先顺序。 */
@@ -25,7 +25,25 @@ export const FAMILIES = Object.freeze({
   '机器人': ['885517'],
 });
 export const PREFERENCE_EXCLUDED = Object.freeze(['资源']);
-export const POSITION = Object.freeze({ '大主升': '重仓', '大主升-减仓': '半仓', '小主升': '半仓', '震荡': '空仓', '筑底': '空仓', '主跌': '空仓' });
+/** 涨停题材口径：剔除业绩、国企、重组等非题材词（与回测 themes.py 同一列表） */
+export const GENERIC_THEME = Object.freeze(['业绩', '增长', '预增', '季报', '年报', '中报', '央企', '国企', '国资', '回购', '控制权', '重组', '收购', '并购', '摘帽',
+  '次新', '小盘', '超跌', '谐音', '生肖', '情绪', '分红', '定增', '复牌', '扭亏', '协议', '入主', '股权', '资产注入', '举牌',
+  '送转', '员工持股', '借壳', '更名', '字辈', '营收', '净利', '亏损', '拟', '重大', '合作', '基地', '项目', '订单']);
+/** 当日同题材涨停集中度：reasons 为涨停池 reason_type 列表 → { name, count } */
+export function themeTop(reasons) {
+  const c = new Map();
+  for (const r of reasons) {
+    const set = new Set(String(r ?? '').split(/[+＋、,，]/).filter(t => t && !GENERIC_THEME.some(g => t.includes(g))));
+    for (const t of set) c.set(t, (c.get(t) ?? 0) + 1);
+  }
+  let name = null, count = 0;
+  for (const [t, n] of c) if (n > count) { name = t; count = n; }   // 并列取先出现者（与 Python Counter.most_common 一致）
+  return { name, count };
+}
+/** 指数线（机构）仓位档位；情绪线仓位见 cycle.js cyclePosition */
+export const POSITION = Object.freeze({ '大主升': '重仓', '大主升-减仓': '半仓', '震荡': '空仓', '筑底': '空仓', '主跌': '空仓' });
+/** 指数线仓位档位查询 */
+export const positionOf = state => POSITION[state];
 
 const FAMILY_OF = Object.fromEntries(Object.entries(FAMILIES).flatMap(([f, cs]) => cs.map(c => [c, f])));
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
@@ -121,18 +139,19 @@ export function features(H, FI, i, P = PARAMS) {
   const sync = tri(isNum(p1) && boardsOk && isNum(fT[lead]), p1 > 0 && (fT[lead] > p1 || (fT[lead] > 0 && isNum(p5sh) && f5[lead] > p5sh)));
   const mainFall = tri(boardsOk && isNum(f5[weak]) && isNum(fT[weak]), f5[weak] <= P.FAM_5D_DOWN && fT[weak] < 0);
   const volVsDecline = tri(isNum(amt[i]), a60 === null ? true : amt[i] >= a60 * P.AMT60_K);
-  const h = L.height[i], dn = L.down[i], up = L.up[i], brk = L.broken[i], lad3 = L.lad3[i];
+  const h = L.height[i], dn = L.down[i], up = L.up[i], brk = L.broken[i], lad3 = L.lad3[i], theme = L.theme?.[i] ?? null;
   const hmax5 = maxDefined(L.height.slice(Math.max(0, i - 5), i)), hmax10 = maxDefined(L.height.slice(Math.max(0, i - 10), i));
   const hExpand = tri(isNum(h) && hmax5 !== null, h >= Math.max(P.H_MIN, hmax5));
   const noLoss = tri(isNum(dn), dn <= P.LOSS_DOWN);
   const ladderOk = tri(isNum(lad3), lad3 >= P.LAD3_MIN);
+  const themeHot = tri(isNum(theme), theme >= P.THEME_MIN);
   const brokenRate = isNum(up) && isNum(brk) && up + brk > 0 ? brk / (up + brk) : null;
   const panic = tri(isNum(dn) && isNum(rsi[i]), dn >= P.PANIC_DOWN && rsi[i] < P.PANIC_RSI);
   const hi20 = i >= 19 ? maxDefined(sh.slice(i - 19, i + 1)) : null;
   let rHi = null; if (i >= 19) { rHi = i - 19; for (let k = i - 19; k < i; k++) if (isNum(sh[k]) && sh[k] > sh[rHi]) rHi = k; }
   return { i, date: H.dates[i], close: sh[i], high: hi[i], m5, m10, m5p, p1, p5sh, amt: amt[i], a20, a60, vr, rsi: rsi[i],
     A1, D1, pt, top, top5d, f5, fT, lead, weak, cnt, cnt5, collective, sync, mainFall, volVsDecline,
-    h, dn, up, brk, lad3, hmax5, hmax10, hExpand, noLoss, ladderOk, brokenRate, panic, hi20, rHi, boardsOk };
+    h, dn, up, brk, lad3, theme, themeName: H.limits.themeName?.[i] ?? null, themeHot, hmax5, hmax10, hExpand, noLoss, ladderOk, brokenRate, panic, hi20, rHi, boardsOk };
 }
 
 /**
@@ -190,11 +209,6 @@ export function replay(H, P = PARAMS) {
       if (T(F.D1) && (leadNeg === true || T(F.mainFall))) { state = '主跌'; ev = '破位清仓'; }
       else if (state === '大主升' && risk.length >= P.RISK_NEED) { state = '大主升-减仓'; ev = '风险降仓'; }
       else if (trigger && F.lead !== leadHold) { leadHold = F.lead; ev = '主线切换'; }
-    } else if (state === '小主升') {
-      if (trigger) { state = '大主升'; ev = '共振爆发'; leadHold = F.lead; }
-      else if (T(F.D1) && (T(F.mainFall) || (isNum(F.p1) && F.p1 <= -1))) { state = '主跌'; ev = '转入主跌'; }
-      else if ((isNum(F.dn) && F.dn >= P.RETREAT_DOWN) || (isNum(F.brokenRate) && F.brokenRate >= P.EXIT_BROKEN_RATE) ||
-               (isNum(F.h) && isNum(F.hmax10) && F.h <= F.hmax10 - P.EXIT_H_DROP && (F.lad3 ?? 0) <= P.EXIT_LAD3_MAX)) { state = '震荡'; ev = '情绪退潮'; }
     } else if (state === '主跌') {
       if (trigger) { state = '大主升'; ev = '共振爆发'; leadHold = F.lead; }
       else if (isNum(F.close) && isNum(F.m5) && F.close > F.m5) { state = '筑底'; ev = '主跌结束（企稳）'; }
@@ -202,13 +216,12 @@ export function replay(H, P = PARAMS) {
       const newLow = isNum(F.close) && i >= 10 && F.close < Math.min(...H.sh.close.slice(i - 10, i).filter(isNum));
       if (trigger) { state = '大主升'; ev = '共振爆发'; leadHold = F.lead; }
       else if (T(F.D1) && (T(F.mainFall) || (isNum(F.p1) && F.p1 <= -1)) && (state === '震荡' || newLow)) { state = '主跌'; ev = '转入主跌'; }
-      else if (T(F.hExpand) && T(F.noLoss) && T(F.ladderOk)) { state = '小主升'; ev = '情绪启动'; }
     }
     const shownLead = state.startsWith('大主升') ? leadHold : F.lead;
-    const row = { ...F, state, prevState: prev, event: ev, position: POSITION[state], leadShown: shownLead, f1: f1.stage, f1full, f1part,
+    const row = { ...F, state, prevState: prev, event: ev, position: positionOf(state), leadShown: shownLead, f1: f1.stage, f1full, f1part,
       volOk, trigger, triggerUnknown, risk, riskUnknown, FI };
     rows.push(row);
-    if (ev) events.push({ date: H.dates[i], event: ev, from: prev, to: state, position: POSITION[state], lead: shownLead });
+    if (ev) events.push({ date: H.dates[i], event: ev, from: prev, to: state, position: positionOf(state), lead: shownLead });
   }
   return { rows, events, final: rows.at(-1) ?? null, FI };
 }

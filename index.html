@@ -112,6 +112,35 @@
   #toast .toast-x{display:block;position:absolute;top:6px;right:8px;width:30px;height:30px;padding:0;border:0;background:transparent;color:var(--muted);font:400 22px/30px var(--sans);text-align:center;cursor:pointer;min-height:0}
   #toast .toast-ok{display:none}
 }
+/* 近一年状态时间线（卡内滚动，保持一屏） */
+.log-card{display:flex;flex-direction:column;min-height:0}
+.log-card .log.tl{flex:1 1 auto;min-height:0;max-height:clamp(90px,20vh,250px);overflow-y:auto;margin-top:4px;border-top:1px solid var(--line2);scrollbar-width:thin}
+.log-card .log.tl li{padding:.32em 0 .32em 8px;border-left:3px solid var(--line2);border-top:1px solid var(--line)}
+.log-card .log.tl li:first-child{border-top:0}
+.log-card .log.tl li.up{border-left-color:var(--red,#c0392b)}.log-card .log.tl li.down{border-left-color:var(--green,#1e8449)}.log-card .log.tl li.emo{border-left-color:var(--violet)}
+.log-card .log.tl time{min-width:8.6em}.log-card .log.tl .st{color:var(--ink);font-weight:600}.log-card .log.tl li.flat .st{color:var(--muted);font-weight:500}
+.log-card .log.tl small{color:var(--muted);font-size:.86em}
+@media (max-width:1180px) and (min-width:861px){.c2>.log-card{min-height:auto}.log-card .log:not(.tl){display:none}.log-card h3{margin-bottom:3px}.log-card .log.tl{max-height:clamp(40px,6.4vh,120px);row-gap:0;margin-top:0}.log-card .log.tl li{padding:2px 0 2px 6px;border-top:0}}
+/* 情绪线（第二条线）与两栏时间线 */
+.emo-line{margin-top:clamp(5px,.8vh,10px);padding:3px 8px;border-left:3px solid var(--line2);background:var(--panel2);border-radius:2px;font-size:.84em;line-height:1.35;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
+.emo-line.on{border-left-color:var(--violet);background:var(--violet-d)}
+.emo-line .emo-tag{font-size:.82em;color:var(--muted);letter-spacing:.06em}
+.emo-line b{color:var(--ink);font-weight:700}.emo-line.on b{color:var(--violet)}
+.emo-line .emo-pos{font-size:.86em;font-weight:650;color:var(--fg2);border:1px solid var(--line2);border-radius:2px;padding:0 5px;background:#fff}
+.emo-line .emo-res{font-size:.82em;color:var(--red);font-weight:650}
+.emo-line small{color:var(--fg2);font-size:.9em}
+.emo-line .emo-note{flex-basis:100%;margin:1px 0 0;font-size:.74em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);line-height:1.4}
+.tl2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;min-height:0;height:clamp(100px,19vh,240px)}
+.tl2 .tlcol{min-width:0;min-height:0;display:flex;flex-direction:column}
+.tl2 .log.tl{flex:1 1 auto;max-height:none !important;min-height:0}
+.tl2 h4{margin:0 0 2px;font-size:.8em;font-weight:650;color:var(--fg2);letter-spacing:.04em}
+.tl2 .log.tl{display:block !important}
+.tl2 .log.tl time{min-width:0;display:block;font-size:.88em}
+.tl2 .log.tl li{display:block}
+@media(min-width:861px) and (max-height:1000px){.c1 .fill .mini tr.mid{display:none}}
+@media(max-width:1180px) and (min-width:861px){.tl2{height:clamp(38px,6.3vh,100px);margin-top:0}.tl2 h4{display:none}}
+@media(max-width:860px){.emo-line{font-size:.8em}.emo-line .emo-note{font-size:.72em}}
+.hero .steps{margin-top:clamp(6px,1vh,12px)}
 </style>
 </head>
 <body>
@@ -127,6 +156,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261015r"></script>
+<script type="module" src="./js/app.js?v=20261016a"></script>
 </body>
 </html>
