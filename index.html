@@ -91,6 +91,13 @@
 .log-card .log{font-size:.93em}
 .log-card .log li{padding:.45em 0}
 @media (max-width:1180px) and (min-width:861px){.log-card .log{font-size:11px;display:grid;grid-template-columns:1fr 1fr;column-gap:14px}.log-card .log li{padding:3px 0;border-top:0}.c2>.log-card,.c2>.condition-card[data-group="res"]{grid-column:1/-1}.c2>.condition-card[data-group="res"] .cl{display:grid;grid-template-columns:1fr 1fr;column-gap:14px}.c2>.condition-card[data-group="res"] .ci:nth-child(2){border-top:0}}
+/* 统一字号（v2026.10.15o）：主文字 = 条件名称大小，次文字 = 条件读数大小；只作用于 PC 和中屏 */
+@media (min-width:861px){
+  .lab,.log-card .log li,.bd .nm,.bd .v,.mini td{font-size:calc(var(--fs)*.93) !important;line-height:1.45}
+  .rd,.bd .tag,.bd .v small,.bd .etf,.mini th,.mini td small,.log-card .log time{font-size:calc(var(--fs)*.8) !important}
+  .log-card .log li{align-items:baseline}
+  .bd .nm{font-weight:700}
+}
 </style>
 </head>
 <body>
@@ -106,6 +113,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261015n"></script>
+<script type="module" src="./js/app.js?v=20261015o"></script>
 </body>
 </html>

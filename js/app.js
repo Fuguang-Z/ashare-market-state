@@ -2,8 +2,8 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261015n';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015n';
+import ds from './datasource.js?v=20261015o';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015o';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -293,7 +293,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.15n';
+const APP_VERSION = '2026.10.15o';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
