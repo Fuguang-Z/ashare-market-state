@@ -1,0 +1,824 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-14T18:01:44.945687+08:00",
+  "version": "20261014.1",
+  "themeCount": 39,
+  "themes": [
+    {
+      "id": "T01",
+      "theme": "半导体",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881121",
+          "name": "半导体",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881121/",
+          "matchType": "exact_name",
+          "chartCode": "881121",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T02",
+      "theme": "存储芯片",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "307940",
+          "name": "存储芯片",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/307940/",
+          "matchType": "exact_name",
+          "chartCode": "886042",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T03",
+      "theme": "CPO（光模块）",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "309049",
+          "name": "共封装光学(CPO)",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/309049/",
+          "matchType": "explicit_alias",
+          "chartCode": "886033",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T04",
+      "theme": "通信设备",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881129",
+          "name": "通信设备",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881129/",
+          "matchType": "exact_name",
+          "chartCode": "881129",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T05",
+      "theme": "PCB",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "308832",
+          "name": "PCB概念",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/308832/",
+          "matchType": "explicit_alias",
+          "chartCode": "885959",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T06",
+      "theme": "消费电子",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "308384",
+          "name": "消费电子概念",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/308384/",
+          "matchType": "explicit_alias",
+          "chartCode": "885800",
+          "codeVerified": true
+        },
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881124",
+          "name": "消费电子",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881124/",
+          "matchType": "exact_name",
+          "chartCode": "881124",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T07",
+      "theme": "元件",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881270",
+          "name": "元件",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881270/",
+          "matchType": "exact_name",
+          "chartCode": "881270",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T08",
+      "theme": "算力租赁",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "309068",
+          "name": "算力租赁",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/309068/",
+          "matchType": "exact_name",
+          "chartCode": "886050",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T09",
+      "theme": "AI 应用 / 软件开发",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "309264",
+          "name": "AI应用",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/309264/",
+          "matchType": "exact_name",
+          "chartCode": "886108",
+          "codeVerified": true
+        },
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881272",
+          "name": "软件开发",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881272/",
+          "matchType": "exact_name",
+          "chartCode": "881272",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T10",
+      "theme": "MLCC",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "309269",
+          "name": "MLCC概念",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/309269/",
+          "matchType": "explicit_alias",
+          "chartCode": "886112",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T11",
+      "theme": "光纤光缆",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T12",
+      "theme": "玻纤",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T13",
+      "theme": "商业航天",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "309130",
+          "name": "商业航天",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/309130/",
+          "matchType": "exact_name",
+          "chartCode": "886078",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T14",
+      "theme": "卫星导航",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "300722",
+          "name": "卫星导航",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/300722/",
+          "matchType": "exact_name",
+          "chartCode": "885574",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T15",
+      "theme": "机器人",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "300816",
+          "name": "机器人概念",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/300816/",
+          "matchType": "explicit_alias",
+          "chartCode": "885517",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T16",
+      "theme": "军工",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "300082",
+          "name": "军工",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/300082/",
+          "matchType": "exact_name",
+          "chartCode": "885700",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T17",
+      "theme": "锂电池（电池）",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "300733",
+          "name": "锂电池概念",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/300733/",
+          "matchType": "explicit_alias",
+          "chartCode": "885710",
+          "codeVerified": true
+        },
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881281",
+          "name": "电池",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881281/",
+          "matchType": "exact_name",
+          "chartCode": "881281",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T18",
+      "theme": "光伏设备",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881279",
+          "name": "光伏设备",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881279/",
+          "matchType": "exact_name",
+          "chartCode": "881279",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T19",
+      "theme": "风电设备",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881280",
+          "name": "风电设备",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881280/",
+          "matchType": "exact_name",
+          "chartCode": "881280",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T20",
+      "theme": "有色金属",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T21",
+      "theme": "贵金属（黄金）",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "300248",
+          "name": "黄金概念",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/300248/",
+          "matchType": "explicit_alias",
+          "chartCode": "885530",
+          "codeVerified": true
+        },
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881169",
+          "name": "贵金属",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881169/",
+          "matchType": "exact_name",
+          "chartCode": "881169",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T22",
+      "theme": "稀土永磁",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "300382",
+          "name": "稀土永磁",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/300382/",
+          "matchType": "exact_name",
+          "chartCode": "885343",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T23",
+      "theme": "化学制药",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881140",
+          "name": "化学制药",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881140/",
+          "matchType": "exact_name",
+          "chartCode": "881140",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T24",
+      "theme": "创新药",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "308014",
+          "name": "创新药",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/308014/",
+          "matchType": "exact_name",
+          "chartCode": "886015",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T25",
+      "theme": "中药",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881141",
+          "name": "中药",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881141/",
+          "matchType": "exact_name",
+          "chartCode": "881141",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T26",
+      "theme": "医疗服务",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881175",
+          "name": "医疗服务",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881175/",
+          "matchType": "exact_name",
+          "chartCode": "881175",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T27",
+      "theme": "农业（种植业 / 农牧饲渔）",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T28",
+      "theme": "食品饮料",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T29",
+      "theme": "商业百货",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T30",
+      "theme": "传媒",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T31",
+      "theme": "出版",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    },
+    {
+      "id": "T32",
+      "theme": "游戏",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881275",
+          "name": "游戏",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881275/",
+          "matchType": "exact_name",
+          "chartCode": "881275",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T33",
+      "theme": "银行",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881155",
+          "name": "银行",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881155/",
+          "matchType": "exact_name",
+          "chartCode": "881155",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T34",
+      "theme": "证券",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881157",
+          "name": "证券",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881157/",
+          "matchType": "exact_name",
+          "chartCode": "881157",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T35",
+      "theme": "保险",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881156",
+          "name": "保险",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881156/",
+          "matchType": "exact_name",
+          "chartCode": "881156",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T36",
+      "theme": "房地产",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881153",
+          "name": "房地产",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881153/",
+          "matchType": "exact_name",
+          "chartCode": "881153",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T37",
+      "theme": "电力",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "industry",
+          "pageCode": "881145",
+          "name": "电力",
+          "pageURL": "https://q.10jqka.com.cn/thshy/detail/code/881145/",
+          "matchType": "exact_name",
+          "chartCode": "881145",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T38",
+      "theme": "煤炭",
+      "status": "matched",
+      "matches": [
+        {
+          "provider": "ths",
+          "category": "concept",
+          "pageCode": "308716",
+          "name": "煤炭概念",
+          "pageURL": "https://q.10jqka.com.cn/gn/detail/code/308716/",
+          "matchType": "explicit_alias",
+          "chartCode": "885914",
+          "codeVerified": true
+        }
+      ]
+    },
+    {
+      "id": "T39",
+      "theme": "中特估",
+      "status": "unmatched",
+      "reason": "第一方目录没有明确同名或已列明别名；不使用相近或上位板块替代",
+      "matches": []
+    }
+  ],
+  "mappings": [
+    {
+      "from": "eastmoney:BK1629",
+      "fromName": "AI应用",
+      "to": "ths:886108",
+      "toName": "AI应用",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "eastmoney",
+        "code": "BK1629",
+        "name": "AI应用"
+      },
+      "history": {
+        "source": "ths",
+        "code": "886108",
+        "name": "AI应用"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "eastmoney:BK1646",
+      "fromName": "消费电子概念",
+      "to": "ths:885800",
+      "toName": "消费电子概念",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "eastmoney",
+        "code": "BK1646",
+        "name": "消费电子概念"
+      },
+      "history": {
+        "source": "ths",
+        "code": "885800",
+        "name": "消费电子概念"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "eastmoney:BK0428",
+      "fromName": "电力",
+      "to": "ths:881145",
+      "toName": "电力",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "eastmoney",
+        "code": "BK0428",
+        "name": "电力"
+      },
+      "history": {
+        "source": "ths",
+        "code": "881145",
+        "name": "电力"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "eastmoney:BK0459",
+      "fromName": "元件",
+      "to": "ths:881270",
+      "toName": "元件",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "eastmoney",
+        "code": "BK0459",
+        "name": "元件"
+      },
+      "history": {
+        "source": "ths",
+        "code": "881270",
+        "name": "元件"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "eastmoney:BK1283",
+      "fromName": "银行",
+      "to": "ths:881155",
+      "toName": "银行",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "eastmoney",
+        "code": "BK1283",
+        "name": "银行"
+      },
+      "history": {
+        "source": "ths",
+        "code": "881155",
+        "name": "银行"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "sina:gn_cxy",
+      "fromName": "创新药",
+      "to": "ths:886015",
+      "toName": "创新药",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "sina",
+        "code": "gn_cxy",
+        "name": "创新药"
+      },
+      "history": {
+        "source": "ths",
+        "code": "886015",
+        "name": "创新药"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "sina:gn_hjgn",
+      "fromName": "黄金概念",
+      "to": "ths:885530",
+      "toName": "黄金概念",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "sina",
+        "code": "gn_hjgn",
+        "name": "黄金概念"
+      },
+      "history": {
+        "source": "ths",
+        "code": "885530",
+        "name": "黄金概念"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "sina:gn_wxdh",
+      "fromName": "卫星导航",
+      "to": "ths:885574",
+      "toName": "卫星导航",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "sina",
+        "code": "gn_wxdh",
+        "name": "卫星导航"
+      },
+      "history": {
+        "source": "ths",
+        "code": "885574",
+        "name": "卫星导航"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "sina:gn_zjqrgn",
+      "fromName": "机器人概念",
+      "to": "ths:885517",
+      "toName": "机器人概念",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "sina",
+        "code": "gn_zjqrgn",
+        "name": "机器人概念"
+      },
+      "history": {
+        "source": "ths",
+        "code": "885517",
+        "name": "机器人概念"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    },
+    {
+      "from": "sina:new_fdc",
+      "fromName": "房地产",
+      "to": "ths:881153",
+      "toName": "房地产",
+      "matchType": "exact_name",
+      "requested": {
+        "source": "sina",
+        "code": "new_fdc",
+        "name": "房地产"
+      },
+      "history": {
+        "source": "ths",
+        "code": "881153",
+        "name": "房地产"
+      },
+      "relation": "exact_name",
+      "sameConstituentsVerified": false,
+      "scopeDifference": "名称一致，跨供应商成分和指数算法不同，历史使用同花顺口径"
+    }
+  ],
+  "definition": "仅同名或明确概念后缀对应；同名不代表跨来源成分和权重相同"
+}

@@ -8,10 +8,14 @@
     :root{color-scheme:light;font-family:system-ui,"Microsoft YaHei",sans-serif;color:#233044;background:#f4f6f9}
     body{max-width:1200px;margin:24px auto;padding:0 18px}h1{font-size:24px}p{line-height:1.7}.note{padding:14px 18px;background:#fff4d9;border-left:4px solid #ad7924;border-radius:4px}.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:20px 0}label{font-size:14px}input,select,button{font:inherit;padding:8px;border:1px solid #c5ccd6;border-radius:5px}button{cursor:pointer;background:white;white-space:nowrap}button:disabled{cursor:wait;opacity:.55}.primary{background:#2458a6;color:white;border-color:#2458a6}.table-wrap{overflow:auto}table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:1050px;background:white;font-size:14px}th,td{border:1px solid #d9dfe7;padding:12px;text-align:left;vertical-align:top}th{background:#e9eef5}td:nth-child(3){overflow-wrap:anywhere}summary{white-space:nowrap}pre{white-space:pre-wrap;word-break:break-all;max-height:280px;overflow:auto;font-size:12px;max-width:100%}.ok{color:#146b42}.bad{color:#a23b2d}.muted{color:#627084}#stats{font-size:13px}footer{margin:20px 0;font-size:13px;color:#627084}
   </style>
+  <style>
+    #stats,#snapshot-status{overflow-wrap:anywhere}
+    input[type="file"]{max-width:100%;box-sizing:border-box}
+  </style>
 </head>
 <body>
   <h1>A 股公开数据源探测</h1>
-  <p>逐项检查 D1–D10 的真实响应、来源、耗时及缺口。此页面只测试数据接口，不判断行情阶段，也不提供交易操作。</p>
+  <p>逐项检查 D1–D10、N1–N4 和 C1–C4 的真实响应、来源、耗时及缺口。此页面只测试数据接口，不判断行情阶段，也不提供交易操作。</p>
   <div id="environment" class="note">请通过 <code>http://localhost</code> 或 HTTPS 打开。本页使用 ES module；Chrome 等浏览器默认禁止通过 <code>file://</code> 加载相邻模块，不能把接口允许 JSONP 等同于整个页面支持双击运行。</div>
   <div class="controls">
     <label>池日期 <input id="pool-date" type="date"></label>
@@ -19,13 +23,21 @@
     <label>板块列表 <select id="board-type"><option value="all">行业与概念全量</option><option value="industry">仅行业</option><option value="concept">仅概念</option></select></label>
     <button id="run" class="primary" disabled>开始逐项探测</button>
     <button id="run-extra" disabled>探测补充 N1–N4</button>
+    <button id="run-monitor" disabled>探测实时能力 C1–C3</button>
     <button id="download" disabled>导出完整 JSON</button>
   </div>
-  <p class="muted">一轮网络请求上限 20 次，主备切换也计数，请求启动间隔至少 1.1 秒并加抖动。板块全量可能需要多页；预算不足会明确失败，可再单独重试。D1 含中证全指，共八个指数；D2 测上证 80 根，D6 测指定板块 80 根，D9 测六只 ETF 实时和沪深300 ETF 的 80 根日 K。补充项单独开始新批次；N5 RSI(12) 在历史包中提供。</p>
+  <div class="controls">
+    <label>近期板块代码（最多6个） <input id="recent-codes" value="ths:881121" size="25"></label>
+    <label>成员板块 <input id="member-code" value="new_blhy" size="12"></label>
+    <label>宽幅最低成交额（元） <input id="wide-min" type="number" value="1000000000" min="0" step="100000000"></label>
+  </div>
+  <p class="muted">实时能力：C1 为统计模型预估（样本不足时保留实际累计额）；C2 只缓存已完成日 K；C3 使用双排名交集。C4 宽幅扫描请单独点击，最多18次请求并缓存5分钟。东财每个页面滚动一分钟最多3次请求，超限项留待下一轮。</p>
+  <p class="muted">一轮网络请求上限 20 次，主备切换也计数，请求启动间隔至少 3 秒并加抖动。板块全量可能需要多页；预算不足会明确失败，可再单独重试。D1 含中证全指，共八个指数；D2 测上证 80 根，D6 测指定板块 80 根，D9 测六只 ETF 实时和沪深300 ETF 的 80 根日 K。补充项单独开始新批次；N5 RSI(12) 在历史包中提供。</p>
+  <p class="note">东财 push2、push2delay、push2his 共享冷却至北京时间 2026-10-14 23:10；之后每 30 分钟最多一次恢复探测，代码、金额等真实字段验证成功后仅开放对应主机。状态保存在当前来源的 localStorage；冷却跳过不计网络预算。push2ex 不在此冷却组内。不同网站来源及本机脚本不共享 localStorage，跨环境探测须统一安排。新浪备源缺少的来源日期、行业等字段会保留为空，不能当作已核日终快照。</p>
   <p><label>可选：N3 前一交易日完整快照 JSON <input id="previous-snapshot" type="file" accept="application/json,.json"></label><span id="snapshot-status" class="muted">未载入，N3 将明确返回缺失。</span></p>
   <p id="stats">模块正在加载……</p>
   <div class="table-wrap"><table><colgroup><col style="width:17%"><col style="width:13%"><col style="width:23%"><col style="width:35%"><col style="width:12%"></colgroup><thead><tr><th>数据项</th><th>状态 / 耗时</th><th>实际来源</th><th>样例 / 缺失原因</th><th>操作</th></tr></thead><tbody id="results"></tbody></table></div>
-  <footer>金额统一为元，pct 为百分数。fetchedAt 是接收时间；sourceDate / sourceTime 缺失时保持 null。专题涨跌停池不等于全 A 股，行业字段不冒充概念。来源有缺口时不提供估算值。</footer>
+  <footer>金额统一为元，pct 为百分数。fetchedAt 是接收时间；sourceDate / sourceTime 缺失时保持 null。专题涨跌停池不等于全 A 股，行业字段不冒充概念。未取得的原始行情不以估算补齐，量能模型预估单独标识。</footer>
   <noscript>浏览器需要启用 JavaScript 才能探测。</noscript>
   <script>
     if(location.protocol==='file:')document.getElementById('stats').textContent='当前为 file://，ES module 通常会被浏览器拦截。请从 site 目录启动本地 HTTP 服务，再打开 /probe.html。';
@@ -41,8 +53,8 @@
     const definitions = [
       ['D1','八个指数实时（含全指）',()=>datasource.getIndexQuotes()],
       ['D2','上证日 K（含金额）',()=>datasource.getIndexDaily({symbol:'sh000001',count:80})],
-      ['D3','沪深两市合计成交额',()=>datasource.getMarketTurnover()],
-      ['D4','全市场涨跌平家数',()=>datasource.getMarketBreadth()],
+      ['D3','两市成交额（软件常用口径）',()=>datasource.getMarketTurnover()],
+      ['D4','东财涨跌分布（不含ST）',()=>datasource.getMarketBreadth()],
       ['D5','行业 / 概念列表',()=>datasource.getBoards({type:byId('board-type').value})],
       ['D6','指定板块日 K',()=>datasource.getBoardDaily({code:byId('board-code').value.trim(),count:80})],
       ['D7','四类涨跌停专题池',()=>datasource.getLimitPools({date:byId('pool-date').value})],
@@ -52,12 +64,20 @@
       ['N1','中证全指 000985 日 K',()=>datasource.getIndexDaily({symbol:'sh000985',count:80})],
       ['N2','两市成交额前20个股',()=>datasource.getTopTurnover(20)],
       ['N3','昨成交20平均涨跌幅',()=>datasource.getYesterdayTopTurnover({snapshot:previousSnapshot,tradeDate:byId('pool-date').value})],
-      ['N4','板块成交额占比',async()=>datasource.getBoardTurnoverShare({board:state.get('D5')?.result?.rows?.[0],market:await datasource.getMarketTurnover()})],
+      ['N4','东财板块成交额占比（近似）',async()=>{
+        const result=state.get('D5')?.result;
+        const board=result?.rows?.[0]??result?.groups?.flatMap(group=>group.ok?group.rows??[]:[]).find(row=>row?.code);
+        return datasource.getBoardTurnoverShare({board,market:await datasource.getMarketTurnover()});
+      }],
+      ['C1','盘中预估全天成交额',()=>datasource.getProjectedTurnover()],
+      ['C2','当前板块近20日',()=>datasource.getBoardRecentDaily(byId('recent-codes').value.split(',').map(code=>code.trim()).filter(Boolean),20)],
+      ['C3','成交额与涨幅领先成员',()=>datasource.getBoardMembers(byId('member-code').value.trim(),10)],
+      ['C4','宽幅候选客观数据',()=>datasource.getWideRangeCandidates({minAmount:Number(byId('wide-min').value),n:10})],
     ];
     const state = new Map(), rowNodes = new Map();
     let running=false;
     function stats(){byId('stats').textContent=`环境 ${location.origin} · ${JSON.stringify(datasource.getRequestStats())}`;}
-    function lock(value){running=value;byId('run').disabled=value;byId('run-extra').disabled=value;for(const button of document.querySelectorAll('[data-retry]'))button.disabled=value;}
+    function lock(value){running=value;byId('run').disabled=value;byId('run-extra').disabled=value;byId('run-monitor').disabled=value;for(const button of document.querySelectorAll('[data-retry]'))button.disabled=value;}
     function preview(result){
       const short=structuredClone(result);
       if(short.rows?.length>2){short.rowCount=short.rows.length;short.rows=short.rows.slice(0,2);}
@@ -80,12 +100,13 @@
       const start=performance.now();let result;
       try{result=await call();}catch(error){result={ok:false,reason:String(error.message??error),source:null,fetchedAt:new Date().toISOString()};}
       const elapsedMs=Math.round(performance.now()-start);state.set(id,{id,name,elapsedMs,result});
-      nodes.row.children[1].textContent=`${result.ok?'成功':'缺失 / 失败'} · ${elapsedMs} ms`;nodes.row.children[1].className=result.ok?'ok':'bad';
+      nodes.row.children[1].textContent=`${result.ok?(result.partial?'成功·字段有缺口':'成功'):'缺失 / 失败'} · ${elapsedMs} ms`;nodes.row.children[1].className=result.ok?'ok':'bad';
       nodes.row.children[2].textContent=Array.isArray(result.source)?result.source.join(', '):result.source??'无可用来源';nodes.pre.textContent=preview(result);nodes.details.open=!result.ok;stats();byId('download').disabled=false;
     }
-    async function runGroup(prefix){if(running)return;lock(true);try{datasource.beginRefresh();for(const [id] of definitions)if(id.startsWith(prefix))await runItem(id);}finally{lock(false);stats();}}
+    async function runGroup(prefix){if(running)return;lock(true);try{datasource.beginRefresh();for(const [id] of definitions)if(id.startsWith(prefix)&&id!=='C4')await runItem(id);}finally{lock(false);stats();}}
     byId('run').addEventListener('click',()=>runGroup('D'));
     byId('run-extra').addEventListener('click',()=>runGroup('N'));
+    byId('run-monitor').addEventListener('click',()=>runGroup('C'));
     byId('previous-snapshot').addEventListener('change',async event=>{
       previousSnapshot=null;const file=event.target.files?.[0];
       if(!file){byId('snapshot-status').textContent='未载入，N3 将明确返回缺失。';return;}
@@ -96,7 +117,7 @@
       const blob=new Blob([JSON.stringify({schema:1,exportedAt:new Date().toISOString(),environment:{protocol:location.protocol,origin:location.origin,userAgent:navigator.userAgent},requestStats:datasource.getRequestStats(),results:[...state.values()]},null,2)],{type:'application/json;charset=utf-8'});
       const href=URL.createObjectURL(blob),link=document.createElement('a');link.href=href;link.download=`datasource-probe-${byId('pool-date').value}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(href),1000);
     });
-    byId('run').disabled=false;byId('run-extra').disabled=false;stats();
+    byId('run').disabled=false;byId('run-extra').disabled=false;byId('run-monitor').disabled=false;stats();
   </script>
 </body>
 </html>
