@@ -2,8 +2,8 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261015q';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015q';
+import ds from './datasource.js?v=20261015r';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015r';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -288,13 +288,14 @@ function notify(title, body) {
 }
 function showToast(title, body) {
   const el = $('#toast');
-  el.innerHTML = `<button type="button" class="toast-x" aria-label="关闭">×</button><strong title="${esc(title)}">${esc(title)}</strong><p title="${esc(body)}">${esc(body)}</p>`;
-  el.hidden = false; el.querySelector('.toast-x').onclick = () => { el.hidden = true; };
+  // 手机端：右上角 ×；PC 端：保留「知道了」按钮（两个按钮由 CSS 按屏宽只显示其一）
+  el.innerHTML = `<button type="button" class="toast-x" aria-label="关闭">×</button><strong title="${esc(title)}">${esc(title)}</strong><p title="${esc(body)}">${esc(body)}</p><button type="button" class="toast-ok" aria-label="关闭">知道了</button>`;
+  el.hidden = false; el.querySelectorAll('.toast-x,.toast-ok').forEach(b => { b.onclick = () => { el.hidden = true; }; });
 }
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.15q';
+const APP_VERSION = '2026.10.15r';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
