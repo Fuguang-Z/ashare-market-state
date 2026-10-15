@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016b';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016b';
-import { cycleReplay, cycleSegments, cyclePosition, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016b';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016b';
+import ds from './datasource.js?v=20261016c';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016c';
+import { cycleReplay, cycleSegments, cyclePosition, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016c';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016c';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -403,7 +403,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16b';
+const APP_VERSION = '2026.10.16c';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -630,7 +630,7 @@ function logHTML() {
     if (g.comp && g.phase !== '退潮') tag.push(`伴生 ${g.comp.join('→')}`);
     if (labelBoard(g.cycleBoard ?? g.board ?? '').startsWith('资源')) tag.push('偏好不参与');
     const pos = g.phase === '情绪试探' || g.phase === '退潮' ? '空仓' : cyclePosition(g.phase);
-    return `<li class="${g.phase === '退潮' || g.phase === '情绪试探' ? 'flat' : 'emo'}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
+    return `<li class="${g.phase === '退潮' ? 'down' : g.phase === '情绪试探' ? 'flat' : 'up'}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
   };
   const cur = idxSegs[0], ep = S.emo?.phase;
   const now = `机构线 <b>${esc(segName(cur?.state ?? '—'))}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>`;
