@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016a';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016a';
-import { cycleReplay, cycleSegments, cyclePosition, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016a';
+import ds from './datasource.js?v=20261016b';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016b';
+import { cycleReplay, cycleSegments, cyclePosition, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016b';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016b';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -403,7 +403,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16a';
+const APP_VERSION = '2026.10.16b';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -539,20 +539,6 @@ function connState() {
   if (ageMin <= 10) return { cls: 'lag', text: `行情延迟 ${Math.round(ageMin)} 分钟` };
   return { cls: 'bad', text: '行情断开' };
 }
-function emoLineHTML() {
-  const e = S.emo; if (!e?.cycles) return '';
-  const a = e.active, L = a?.leader ?? (e.phase === '退潮' ? e.last.leader : null);
-  const h = a?.main.chain.at(-1), c = a?.comp?.chain.at(-1);
-  const parts = [];
-  if (L) parts.push(`龙头 ${L.name}`);
-  if (h && h.code !== L?.code) parts.push(`高标 ${h.name}`);
-  if (c) parts.push(`伴生 ${c.name}`);
-  if (L) parts.push(labelBoard(L.board));
-  const res = a?.resonance ? '<span class="emo-res">情绪·机构·指数共振（大行情）</span>' : '';
-  const pref = L && labelBoard(L.board).startsWith('资源') ? ' · 外围驱动，偏好不参与' : '';
-  return `<div class="emo-line ${a ? 'on' : ''}" title="情绪仓位：情绪主升半仓、第 1 轮补涨轻仓、之后观望；龙头反抽后当前高标断板即退潮。"><span class="emo-tag">情绪线</span><b>${esc(e.phase)}</b><span class="emo-pos">${esc(e.position)}</span>${res}${parts.length ? `<small>（${esc(parts.join(' · ') + pref)}${e.since ? ` · 自 ${esc(e.since.slice(5))}` : ''}）</small>` : ''}
-    <p class="emo-note">注：情绪周期多在指数（机构）震荡时出现；与指数、机构共振（如商业航天）属少见的大行情。</p></div>`;
-}
 function heroHTML(f) {
   const meta = STAGE_META[f.state] ?? { cls: 'flat', name: f.state, sub: '' };
   const r = S.result, y = r.yesterday;
@@ -574,7 +560,6 @@ function heroHTML(f) {
         r.todayAppended ? (isNum(vsY) ? `较昨日 <span class="${sign(vsY)}">${fmtPct(vsY, 1)}</span>` : '较昨日 —') : '')}
       ${kpi('全指 RSI12', isNum(f.rsi) ? `${f.rsi.toFixed(1)} <small>${rsiZone(f.rsi)}${isNum(rsiStreak()) ? `（连续 ${rsiStreak()} 天）` : ''}</small>` : '—', isNum(f.rsi) && f.rsi < 30 ? 'g' : isNum(f.rsi) && f.rsi > 70 ? 'r' : '', '（&lt;30 超跌 · &gt;70 超买）')}
     </div>
-    ${emoLineHTML()}
     <div class="steps" title="二次探底进度">${steps}</div>
     <div class="steps-lab">${F1_STEPS.map(s => `<span>${s}</span>`).join('')}</div>
     ${r.todayAppended && f.event ? `<div class="tent">今日试算：${esc(f.event)}（昨日确认：${esc(STAGE_META[y?.state]?.name ?? '—')}）${phaseInfo().alertLevel ? '' : '，10:30 前只观察'}</div>`
@@ -631,13 +616,13 @@ function indexSegs() {
   }
   return segs;
 }
-const dspan = g => `${g.start.slice(2).replace(/-/g, '.')}${g.end && g.end !== g.start ? `–${g.end.slice(5).replace('-', '.')}` : ''}`;
+const dspan = (g, now = false) => `${g.start.slice(2).replace(/-/g, '.')}${now ? '–至今' : g.end && g.end !== g.start ? `–${g.end.slice(5).replace('-', '.')}` : ''}`;
 function logHTML() {
   const log = load(`log.${S.calendar?.date}`, []).slice(0, 2);
   const idxSegs = indexSegs().reverse();
   const icls = st => (st.startsWith('大主升') ? 'up' : st === '主跌' ? 'down' : 'flat');
   const emoSegs = S.emo?.cycles ? cycleSegments(S.emo.cycles, S.emo.lastDate).reverse() : [];
-  const emoItem = g => {
+  const emoItem = (g, k) => {
     const tag = [];
     if (g.phase === '情绪主升' || g.phase === '情绪试探') { tag.push(`龙头 ${g.leader}`, labelBoard(g.board)); if (g.resonance) tag.push('情绪·机构·指数共振'); if (g.phase === '情绪试探') tag.push('5 日内指数转入主跌，未成周期'); }
     else if (g.phase === '退潮') tag.push(`${g.cycleLeader} 周期：${g.reason ?? '结束'}`);
@@ -645,11 +630,13 @@ function logHTML() {
     if (g.comp && g.phase !== '退潮') tag.push(`伴生 ${g.comp.join('→')}`);
     if (labelBoard(g.cycleBoard ?? g.board ?? '').startsWith('资源')) tag.push('偏好不参与');
     const pos = g.phase === '情绪试探' || g.phase === '退潮' ? '空仓' : cyclePosition(g.phase);
-    return `<li class="${g.phase === '退潮' || g.phase === '情绪试探' ? 'flat' : 'emo'}"><time>${esc(dspan(g))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
+    return `<li class="${g.phase === '退潮' || g.phase === '情绪试探' ? 'flat' : 'emo'}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
   };
-  return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span></h3><ul class="log">
-    ${log.map(x => `<li><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b>${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul>
-    <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl">${idxSegs.map(g => { const t = segTag(g); return `<li class="${icls(g.state)}"><time>${esc(dspan(g))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul></div>
+  const cur = idxSegs[0], ep = S.emo?.phase;
+  const now = `机构线 <b>${esc(segName(cur?.state ?? '—'))}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>`;
+  return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span><span class="cnt now-h">${now}</span></h3><div class="log-top"><ul class="log ${log.length ? 'hot' : 'idle'}">
+    ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span></div>
+    <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul></div>
     <div class="tlcol"><h4>情绪线</h4><ul class="log tl">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul></div></div></section>`;
 }
 

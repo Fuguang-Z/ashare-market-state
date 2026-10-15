@@ -120,7 +120,7 @@
 .log-card .log.tl li.up{border-left-color:var(--red,#c0392b)}.log-card .log.tl li.down{border-left-color:var(--green,#1e8449)}.log-card .log.tl li.emo{border-left-color:var(--violet)}
 .log-card .log.tl time{min-width:8.6em}.log-card .log.tl .st{color:var(--ink);font-weight:600}.log-card .log.tl li.flat .st{color:var(--muted);font-weight:500}
 .log-card .log.tl small{color:var(--muted);font-size:.86em}
-@media (max-width:1180px) and (min-width:861px){.c2>.log-card{min-height:auto}.log-card .log:not(.tl){display:none}.log-card h3{margin-bottom:3px}.log-card .log.tl{max-height:clamp(40px,6.4vh,120px);row-gap:0;margin-top:0}.log-card .log.tl li{padding:2px 0 2px 6px;border-top:0}}
+@media (max-width:1180px) and (min-width:861px){.c2>.log-card{min-height:auto}.log-card .log.idle{display:none}.log-card h3{margin-bottom:3px}.log-card .log.tl{max-height:clamp(40px,6.4vh,120px);row-gap:0;margin-top:0}.log-card .log.tl li{padding:2px 0 2px 6px;border-top:0}}
 /* 情绪线（第二条线）与两栏时间线 */
 .emo-line{margin-top:clamp(5px,.8vh,10px);padding:3px 8px;border-left:3px solid var(--line2);background:var(--panel2);border-radius:2px;font-size:.84em;line-height:1.35;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
 .emo-line.on{border-left-color:var(--violet);background:var(--violet-d)}
@@ -130,13 +130,26 @@
 .emo-line .emo-res{font-size:.82em;color:var(--red);font-weight:650}
 .emo-line small{color:var(--fg2);font-size:.9em}
 .emo-line .emo-note{flex-basis:100%;margin:1px 0 0;font-size:.74em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);line-height:1.4}
-.tl2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;min-height:0;height:clamp(100px,19vh,240px)}
+.tl2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;min-height:0;height:clamp(84px,16.5vh,220px)}
+.log-card:has(.log.hot) .tl2{height:clamp(60px,12vh,180px)}
 .tl2 .tlcol{min-width:0;min-height:0;display:flex;flex-direction:column}
 .tl2 .log.tl{flex:1 1 auto;max-height:none !important;min-height:0}
 .tl2 h4{margin:0 0 2px;font-size:.8em;font-weight:650;color:var(--fg2);letter-spacing:.04em}
 .tl2 .log.tl{display:block !important}
 .tl2 .log.tl time{min-width:0;display:block;font-size:.88em}
 .tl2 .log.tl li{display:block}
+.log-top{display:flex;flex-direction:column;gap:3px;min-width:0}.log-top .log{min-width:0}
+.log.hot{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.log.hot li{min-width:0;white-space:nowrap}.log.hot li .event{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cnt.now-h{display:none}
+.log.hot li{display:flex;align-items:baseline;gap:8px;padding:5px 8px !important;margin-bottom:0;border:0 !important;border-left:4px solid var(--amber) !important;background:var(--amber-d);border-radius:3px;font-size:1.02em}
+.log.hot li .lv{flex:none;color:#fff !important;background:var(--amber);border-radius:2px;padding:0 6px;font-weight:700}
+.log.hot li .event{font-weight:700;color:var(--ink)}
+.log.hot li.lv-ok{border-left-color:var(--red) !important;background:var(--red-d)}.log.hot li.lv-ok .lv{background:var(--red)}
+.log.hot li.fresh{animation:hotpulse 1.6s ease-in-out 6}
+@keyframes hotpulse{0%,100%{box-shadow:0 0 0 0 #94570000}50%{box-shadow:0 0 0 3px #94570040}}
+.now-tag{flex:none;font-size:.86em;color:var(--fg2);white-space:nowrap}.now-tag b{color:var(--ink);font-weight:700}
+@media(max-width:1180px) and (min-width:861px){.log-card h3 .cnt{display:none}.log-card h3 .cnt.now-h{display:inline}.log-top .now-tag{display:none}.log-card:has(.log.hot) .tl2{display:none}.log.hot li{padding:2px 6px !important;font-size:11px}.log-card:has(.log.hot) h3{margin-bottom:3px}.log-card:has(.log.hot){padding-top:6px;padding-bottom:6px}}
 @media(min-width:861px) and (max-height:1000px){.c1 .fill .mini tr.mid{display:none}}
 @media(max-width:1180px) and (min-width:861px){.tl2{height:clamp(38px,6.3vh,100px);margin-top:0}.tl2 h4{display:none}}
 @media(max-width:860px){.emo-line{font-size:.8em}.emo-line .emo-note{font-size:.72em}}
@@ -156,6 +169,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261016a"></script>
+<script type="module" src="./js/app.js?v=20261016b"></script>
 </body>
 </html>

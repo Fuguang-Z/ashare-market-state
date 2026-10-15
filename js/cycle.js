@@ -3,7 +3,7 @@
  * 脉络：指数止跌 → 龙头主升、打开高度 → 龙头震荡，补涨开启 → 高标依次见顶、新高标接力 → 龙头反抽双顶 → 情绪退潮。
  * 主线之外可有一条伴生线，随主线周期一起结束。
  */
-import { GENERIC_THEME } from './engine.js?v=20261016a';
+import { GENERIC_THEME } from './engine.js?v=20261016b';
 
 export const CYCLE_PARAMS = Object.freeze({
   PANIC_DOWN: 30, SHAKE_AMP: 12.0, SHAKE_FROM_HIGH: 2.0, DROP: -5.0, STALL: 3.0, WIN: 3, STRENGTH: 6, STRENGTH_RES: 5, RES_LOOK: 5, HOLD: 3,
@@ -224,9 +224,13 @@ export function cycleSegments(cycles, lastDate) {
       segs.push({ ...m, end: next ? next.start : (c.end ?? lastDate), cycleStart: c.start, cycleLeader: c.leader.name, cycleBoard: c.leader.board,
         resonance: !!c.resonance, voided: !!c.voided, comp: compAt(c, next ? next.start : (c.end ?? lastDate)), open: !next && !c.end });
     });
-    if (c.end && !c.voided) segs.push({ start: c.end, end: null, phase: '退潮', leader: c.leader.name, board: c.leader.board, reason: c.endReason, cycleStart: c.start, cycleLeader: c.leader.name });
+    if (c.end && !c.voided) segs.push({ start: c.end, end: nextStart(cycles, c), phase: '退潮', leader: c.leader.name, board: c.leader.board, reason: c.endReason, cycleStart: c.start, cycleLeader: c.leader.name });
   }
   return segs;
+}
+function nextStart(cycles, c) {
+  const k = cycles.indexOf(c);
+  return cycles[k + 1]?.start ?? null;
 }
 function compAt(c, date) {
   if (!c.comp) return null;
