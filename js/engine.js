@@ -109,7 +109,11 @@ export function features(H, FI, i, P = PARAMS) {
   const top = byDesc(pt).slice(0, P.FAM_TOP), top5d = byDesc(p5b).slice(0, P.FAM_TOP);
   const fams = Object.keys(FAMILIES);
   const f5 = {}, fT = {};
-  for (const f of fams) { f5[f] = pct(FI[f], i, 5); fT[f] = pct(FI[f], i); }
+  for (const f of fams) {
+    // 当日该族群没有任何成员有涨跌数据（如盘中板块尚未轮询到）→ 记为未知，不显示成 0%
+    const covered = FAMILIES[f].some(c => H.boards[c] && pct(H.boards[c].close, i) !== null);
+    f5[f] = covered ? pct(FI[f], i, 5) : null; fT[f] = covered ? pct(FI[f], i) : null;
+  }
   const boardsOk = Object.keys(pt).length >= 10 && fams.some(f => isNum(f5[f]));
   const lead = argMax(f5, fams), weak = argMin(f5, fams);
   const cnt = top.filter(c => FAMILY_OF[c] === lead).length, cnt5 = top5d.filter(c => FAMILY_OF[c] === lead).length;
