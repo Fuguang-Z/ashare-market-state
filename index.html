@@ -142,6 +142,15 @@
 .log.hot{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .log.hot li{min-width:0;white-space:nowrap}.log.hot li .event{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .cnt.now-h{display:none}
+/* 提醒与切换：标题 / 今日切换 / 现状 / 时间线 之间的分割线 */
+.log-card h3{padding-bottom:5px;margin-bottom:0 !important;border-bottom:1px solid var(--line)}
+.log-top{padding:4px 0 0}
+.log-top .log{padding-bottom:4px;border-bottom:1px solid var(--line)}
+.log-top .log.hot{padding-bottom:5px}
+.log-top .now-tag{padding:1px 0 4px;border-bottom:1px solid var(--line2)}
+.log-card .tl2{margin-top:4px}
+.log-card .log li.muted{padding:1px 0 !important}
+@media(max-width:1180px) and (min-width:861px){.log-card .log-top:has(.log.idle){display:none}.log-card h3{padding-bottom:3px}.log-card .tl2{margin-top:3px}.tl2{height:clamp(33px,5.2vh,100px) !important}}
 .log.hot li{display:flex;align-items:baseline;gap:8px;padding:5px 8px !important;margin-bottom:0;border:0 !important;border-left:4px solid var(--amber) !important;background:var(--amber-d);border-radius:3px;font-size:1.02em}
 .log.hot li .lv{flex:none;color:#fff !important;background:var(--amber);border-radius:2px;padding:0 6px;font-weight:700}
 .log.hot li .event{font-weight:700;color:var(--ink)}
@@ -169,6 +178,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261016c"></script>
+<script type="module" src="./js/app.js?v=20261016d"></script>
 </body>
 </html>
