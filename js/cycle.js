@@ -3,7 +3,7 @@
  * 脉络：指数止跌 → 龙头主升、打开高度 → 龙头震荡，补涨开启 → 高标依次见顶、新高标接力 → 龙头反抽双顶 → 情绪退潮。
  * 主线之外可有一条伴生线，随主线周期一起结束。
  */
-import { GENERIC_THEME } from './engine.js?v=20261016d';
+import { GENERIC_THEME } from './engine.js?v=20261016e';
 
 export const CYCLE_PARAMS = Object.freeze({
   PANIC_DOWN: 30, SHAKE_AMP: 12.0, SHAKE_FROM_HIGH: 2.0, DROP: -5.0, STALL: 3.0, WIN: 3, STRENGTH: 6, STRENGTH_RES: 5, RES_LOOK: 5, HOLD: 3,
@@ -52,7 +52,7 @@ export function streaks(D, P, minLen = 3, horizon = 10) {
       if (run.length >= minLen) {
         const i0 = idx.get(run[0]);
         let strength = 0;
-        for (let k = i0; k < Math.min(D.length, i0 + horizon); k++) if (P[D[k]]?.[c]) strength++;
+        for (let k = i0, n = 0; k < D.length && n < horizon; k++) { if (!P[D[k]]) continue; n++; if (P[D[k]][c]) strength++; }   // 首板起 horizon 个有涨停池的交易日
         const tc = new Map();
         for (const d of run) for (const t of P[d][c][1]) tc.set(t, (tc.get(t) ?? 0) + 1);
         const themes = [...tc].sort((a, b) => b[1] - a[1] || cmp(a[0], b[0])).slice(0, 3);
@@ -60,7 +60,7 @@ export function streaks(D, P, minLen = 3, horizon = 10) {
       }
       run = [];
     };
-    for (const d of D) { if (P[d]?.[c]) run.push(d); else flush(); }
+    for (const d of D) { if (!P[d]) continue; if (P[d][c]) run.push(d); else flush(); }   // 缺当日涨停池：既不算涨停也不算断板
     flush();
   }
   return out.sort((a, b) => cmp(a.start, b.start) || b.strength - a.strength || cmp(a.code, b.code));
@@ -69,16 +69,19 @@ export function streaks(D, P, minLen = 3, horizon = 10) {
 /**
  * dates: 交易日；pools: {date: {code: [name, themes[]]}}；kline: code → {date: {close, high, low}}（缺失返回 null，并记入 missing）；
  * feat: {date: {state, hExpand, down, lad3, event, lead}}（指数线逐日结果）。
- * startAfter：只在该日之后识别新周期（之前的周期以复盘时间线为准）。返回 { cycles, missing:Set<code> }。
+ * startAfter：只在该日之后识别新周期（之前的周期以复盘时间线为准）。
+ * 返回 { cycles, missing:Set<code>（整只无日 K）, stale:Map<code, date>（有日 K 但缺该日及之前所需日期） }。
  */
 export function cycleReplay({ dates: D, pools: P, kline, feat, params = CYCLE_PARAMS, startAfter = null }) {
   const prm = params, idx = new Map(D.map((d, i) => [d, i]));
   const ST = streaks(D, P), STRONG = ST.filter(s => s.strength >= prm.STRENGTH);
-  const missing = new Set(), Kc = new Map();
+  const missing = new Set(), stale = new Map(), Kc = new Map();
+  const need = (c, d) => { if (!stale.has(c) || stale.get(c) < d) stale.set(c, d); };
   const k = c => { if (!Kc.has(c)) { const v = kline(c); if (!v) missing.add(c); Kc.set(c, v ?? {}); } return Kc.get(c); };
   const lim = (c, d) => !!(d && P[d] && P[d][c]);
   const bar = (c, i) => {
     const kk = k(c), r = kk[D[i]], p = i ? kk[D[i - 1]] : null;
+    if (!r) need(c, D[i]);
     if (!r || !p) return null;
     const pc = p.close;
     return { chg: (r.close / pc - 1) * 100, amp: (r.high - r.low) / pc * 100, fromHigh: (r.close / r.high - 1) * 100 };
@@ -107,6 +110,7 @@ export function cycleReplay({ dates: D, pools: P, kline, feat, params = CYCLE_PA
       }
       if (mates.size < prm.DRIVE_MIN) continue;
       const kk = k(c);
+      if (!kk[D[hi]]) need(c, D[hi]);
       const cw = win.filter(d => kk[d]).map(d => kk[d].close);
       const base = []; for (let j = Math.max(0, i - prm.GAIN_WIN); j <= i; j++) if (kk[D[j]]) base.push(kk[D[j]].close);
       if (!cw.length || !base.length) continue;
@@ -161,7 +165,7 @@ export function cycleReplay({ dates: D, pools: P, kline, feat, params = CYCLE_PA
   const cycles = []; let cur = null;
   for (let i = 0; i < D.length; i++) {
     const d = D[i], f = feat[d];
-    if (!f) continue;
+    if (!f || !P[d]) continue;   // 缺当日涨停池：不处理（缺失 ≠ 未涨停）
     if (!cur) {
       if (startAfter && d <= startAfter) continue;   // 之前的周期由复盘时间线给出
       const L = trig(f) ? leaderAt(i) : null;
@@ -207,7 +211,31 @@ export function cycleReplay({ dates: D, pools: P, kline, feat, params = CYCLE_PA
     }
   }
   if (cur) cycles.push(cur);
-  return { cycles, missing };
+  return { cycles, missing, stale };
+}
+
+/**
+ * 情绪提醒事件（纯函数）。known：{key: 首次识别日}，跨日持久化；返回本次应提醒的事件与更新后的 known。
+ * - 周期启动、补涨/伴生接力：以「首次识别日 = 今天」为准（历史归属日可能早于今天，如龙头需后几日确认），同一天的预警和确认都会发；
+ * - 只提醒种子日期之后的事件（更早的属于复盘历史）。
+ */
+export function emoAlertEvents({ active, last, hints = [] }, today, known = {}, seedThrough = '') {
+  const k = { ...known }, evs = [];
+  const firstSeen = key => { if (!k[key]) k[key] = today; return k[key] === today; };
+  const a = active, c = active ?? last;
+  if (a && a.start > seedThrough && firstSeen(`C|${a.start}|${a.leader.code}`))
+    evs.push(['情绪主升', `情绪周期启动${a.start === today ? '' : `（自 ${a.start.slice(5)} 起）`}：龙头 ${a.leader.name}（${labelBoard(a.leader.board)}）打开高度。按规则情绪仓位半仓，只参与龙头与第一轮补涨。`]);
+  if (a) for (const ln of [a.main, a.comp]) for (const rd of ln?.rounds ?? []) {
+    const isMain = ln === a.main;
+    if (rd.topDate <= seedThrough || !firstSeen(`R|${a.start}|${isMain ? 'M' : 'C'}|${rd.round}|${rd.code}`)) continue;
+    evs.push([isMain ? `第${rd.round}轮补涨` : '伴生线接力', `${rd.topOf} ${rd.signal}，新高标 ${rd.name}（${rd.board ?? '—'}）自 ${rd.start.slice(5)} 起接力。${isMain ? (rd.round === 1 ? '按规则第一轮补涨轻仓。' : '第二轮及以后补涨按规则观望。') : ''}`]);
+  }
+  if (c?.end === today && !c.voided) evs.push(['情绪退潮', `情绪周期结束（${c.endReason}）：按规则清掉情绪仓位，退潮期不开仓。`]);
+  for (const h of hints) {
+    if (h.kind === '高标见顶') evs.push([`${h.line}高标见顶`, `${h.line}高标 ${h.name} 今日${h.signal}：留意新一轮补涨启动（今日首板：${h.firsts.join('、') || '—'}）。`]);
+    if (h.kind === '龙头反抽') evs.push(['龙头反抽', `龙头 ${h.name} 反抽涨停：周期进入末段，当前高标断板即退潮。`]);
+  }
+  return { events: evs, known: k };
 }
 
 /** 情绪线仓位档位：情绪主升半仓、第 1 轮补涨轻仓、之后观望 */

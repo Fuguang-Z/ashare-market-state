@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016d';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016d';
-import { cycleReplay, cycleSegments, cyclePosition, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016d';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016d';
+import ds from './datasource.js?v=20261016e';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016e';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016e';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016e';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -132,7 +132,7 @@ async function ordinaryRound() {
   if (S.tick % 3 === 2) { const b = await ds.getMarketBreadth(); if (b.ok) S.today.breadth = b; }
   // 同花顺涨停池：题材集中度（板块效应）与情绪龙头
   const th = await ds.getTHSLimitThemes(date);
-  if (th.ok) S.today.themes = { date, rows: th.rows, top: themeTop(th.rows.map(r => r.reasonText)) };
+  if (th.ok && !th.partial) S.today.themes = { date, rows: th.rows, top: themeTop(th.rows.map(r => r.reasonText)) };
   // 同花顺板块轮询
   const n = ALL_BOARDS.length, pick = [];
   for (let k = 0; k < BOARDS_PER_TICK; k++) pick.push(ALL_BOARDS[(S.boardCursor + k) % n]);
@@ -184,9 +184,18 @@ async function backfillRound() {
     const up = p.pools?.up, dn = p.pools?.down, br = p.pools?.broken;
     if (up?.ok && dn?.ok && br?.ok) {
       const lbc = up.rows.map(r => r.consecutiveLimitUps).filter(isNum);
-      const th = await ds.getTHSLimitThemes(d), tt = th.ok ? themeTop(th.rows.map(r => r.reasonText)) : null;
-      if (th.ok) ex.pools[d] = th.rows.map(r => [r.code, r.name, r.reasonText]);
+      const th = await ds.getTHSLimitThemes(d), full = th.ok && !th.partial, tt = full ? themeTop(th.rows.map(r => r.reasonText)) : null;
+      if (full) ex.pools[d] = th.rows.map(r => [r.code, r.name, r.reasonText]);
       ex.limits[d] = { up: up.count, down: dn.count, broken: br.count, height: lbc.length ? Math.max(...lbc) : 0, lad3: lbc.filter(v => v >= 3).length, theme: tt?.count ?? null, themeName: tt?.name ?? null };
+    }
+  }
+  // 涨跌停已补、但题材涨停池缺失或不完整的日子：单独重试题材
+  const dp = miss.find(x => ex.limits[x] && !ex.pools?.[x] && x !== d);
+  if (dp) {
+    const th = await ds.getTHSLimitThemes(dp);
+    if (th.ok && !th.partial) {
+      ex.pools[dp] = th.rows.map(r => [r.code, r.name, r.reasonText]);
+      const tt = themeTop(th.rows.map(r => r.reasonText)); ex.limits[dp].theme = tt.count; ex.limits[dp].themeName = tt.name;
     }
   }
   for (const c of Object.keys(ex.boards)) for (const day of Object.keys(ex.boards[c])) if (day <= S.seed.through) delete ex.boards[c][day];
@@ -198,7 +207,7 @@ async function backfillRound() {
 function updateBackfill() {
   const miss = missingDates(), ex = S.extra;
   const boardsDone = ALL_BOARDS.filter(c => miss.every(d => isNum(ex.boards[c]?.[d]))).length;
-  const limitsDone = miss.filter(d => ex.limits[d]).length;
+  const limitsDone = miss.filter(d => ex.limits[d] && ex.pools?.[d]).length;
   S.backfill = { missing: miss, boardsDone, limitsDone, complete: !miss.length || (boardsDone === ALL_BOARDS.length && limitsDone === miss.length), tooOld: miss.length > 55 };
 }
 
@@ -280,13 +289,17 @@ function evaluateEmotion(H, rows) {
     return a || b ? { ...(a ?? {}), ...(b ?? {}) } : null;
   };
   const startAfter = S.seed.cycleStartAfter ?? null;
-  const { cycles: live, missing } = cycleReplay({ dates, pools, kline, feat: featFromRows(rows), startAfter });
+  const { cycles: live, missing, stale } = cycleReplay({ dates, pools, kline, feat: featFromRows(rows), startAfter });
   const fixed = (S.timeline?.cycles ?? []).filter(c => !startAfter || c.start <= startAfter);
   const all = [...fixed, ...live];
   const last = all.at(-1), lastDate = dates.at(-1);
   const active = last && !last.end ? last : null;
   // 需要最新日 K 的个股：周期回放缺失的 + 活跃周期的当前高标（种子之后的交易日）
   for (const c of missing) S.kQueue.add(c);
+  for (const [c, d] of stale) {
+    const have = S.stockK[c];
+    if (d > through && !(have?.bars?.[d]) && (!have || Date.now() - have.time > 30 * 60000)) S.kQueue.add(c);
+  }
   if (active) for (const ln of [active.main, active.comp]) if (ln) {
     const c = ln.chain.at(-1).code, have = S.stockK[c];
     if (lastDate > through && (!have || have.at !== today || (S.calendar?.refreshRecommended && Date.now() - have.time > 5 * 60000))) S.kQueue.add(c);
@@ -301,8 +314,9 @@ function evaluateEmotion(H, rows) {
   const hints = [];
   if (active && S.result.todayAppended) {
     const P = CYCLE_PARAMS, todayPool = pools[today] ?? {};
+    const downToday = S.result.final?.dn;
     for (const [ln, nm] of [[active.main, '主线'], [active.comp, '伴生线']]) {
-      if (!ln) continue;
+      if (!ln || (ln.hLimits ?? 0) < 2 || (isNum(downToday) && downToday >= P.PANIC_DOWN)) continue;
       const h = ln.chain.at(-1), bars = kline(h.code), i = dates.length - 1;
       const r = bars?.[dates[i]], p = bars?.[dates[i - 1]];
       if (!r || !p || todayPool[h.code]) continue;
@@ -363,20 +377,9 @@ function maybeEmoAlert() {
   const e = S.emo, r = S.result, today = S.calendar?.date;
   if (!e?.cycles || !r?.todayAppended) return;
   const p = phaseInfo(); if (!p.alertLevel) return;
-  const evs = [];
-  const a = e.active, c = a ?? e.last;
-  if (a && a.start === today) evs.push(['情绪主升', `情绪周期启动：龙头 ${a.leader.name}（${labelBoard(a.leader.board)}）打开高度。按规则情绪仓位半仓，只参与龙头与第一轮补涨。`]);
-  if (a) for (const ln of [a.main, a.comp]) for (const rd of ln?.rounds ?? []) {
-    const known = load('emoRounds', {}), key = `${a.start}|${ln === a.main ? 'M' : 'C'}|${rd.round}|${rd.code}`;
-    if (known[key]) continue;
-    known[key] = today; save('emoRounds', known);
-    if (rd.topDate > (S.seed.through ?? '')) evs.push([ln === a.main ? `第${rd.round}轮补涨` : '伴生线接力', `${rd.topOf} ${rd.signal}，新高标 ${rd.name}（${rd.board ?? '—'}）自 ${rd.start.slice(5)} 起接力。${ln === a.main ? (rd.round === 1 ? '按规则第一轮补涨轻仓。' : '第二轮及以后补涨按规则观望。') : ''}`]);
-  }
-  if (c?.end === today && !c.voided) evs.push(['情绪退潮', `情绪周期结束（${c.endReason}）：按规则清掉情绪仓位，退潮期不开仓。`]);
-  for (const h of e.hints) {
-    if (h.kind === '高标见顶') evs.push([`${h.line}高标见顶`, `${h.line}高标 ${h.name} 今日${h.signal}：留意新一轮补涨启动（今日首板：${h.firsts.join('、') || '—'}）。`]);
-    if (h.kind === '龙头反抽') evs.push(['龙头反抽', `龙头 ${h.name} 反抽涨停：周期进入末段，当前高标断板即退潮。`]);
-  }
+  const { events: evs, known } = emoAlertEvents(e, today, load('emoKnown', {}), S.seed.through ?? '');
+  for (const k of Object.keys(known)) if (known[k] < S.seed.through) delete known[k];
+  save('emoKnown', known);
   const fired = load('fired', {});
   for (const [ev, text] of evs) {
     const key = `${today}|情绪|${ev}|${p.alertLevel}`;
@@ -403,7 +406,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16d';
+const APP_VERSION = '2026.10.16e';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
