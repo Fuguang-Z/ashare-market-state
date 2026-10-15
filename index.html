@@ -100,6 +100,15 @@
 }
 /* 手机端行情标识靠右，紧贴提醒按钮（v2026.10.15p） */
 @media (max-width:860px){.top .conn{margin-left:auto}}
+/* 弹出框：底部居中、统一尺寸、右上角 ×（v2026.10.15q） */
+#toast{position:fixed !important;left:50% !important;right:auto !important;top:auto !important;bottom:calc(12px + env(safe-area-inset-bottom)) !important;transform:translateX(-50%) !important;
+  width:min(560px,calc(100vw - 24px)) !important;height:96px !important;max-width:none !important;box-sizing:border-box;margin:0 !important;
+  padding:14px 44px 12px 16px !important;background:#fff;border:1px solid var(--line2);border-top:3px solid var(--navy);border-radius:6px;box-shadow:0 10px 30px rgba(20,36,47,.18);z-index:20;overflow:hidden}
+#toast strong{display:block;font-size:14px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#toast p{margin:6px 0 0 !important;font-size:13px;line-height:1.5;color:var(--fg2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#toast .toast-x{position:absolute;top:6px;right:8px;width:30px;height:30px;padding:0;border:0;background:transparent;color:var(--muted);font:400 22px/30px var(--sans);text-align:center;cursor:pointer;min-height:0}
+#toast .toast-x:hover{color:var(--ink);background:var(--panel2);border-radius:4px}
+#toast[hidden]{display:none !important}
 </style>
 </head>
 <body>
@@ -115,6 +124,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261015p"></script>
+<script type="module" src="./js/app.js?v=20261015q"></script>
 </body>
 </html>
