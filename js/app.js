@@ -2,8 +2,8 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261015k';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015k';
+import ds from './datasource.js?v=20261015m';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey } from './engine.js?v=20261015m';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -293,7 +293,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.15k';
+const APP_VERSION = '2026.10.15m';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -433,7 +433,7 @@ function heroHTML(f) {
       ${kpi('上证指数', isNum(f.close) ? `${f.close.toFixed(2)} <small class="${sign(f.p1)}">${fmtPct(f.p1)}</small>` : '—', '')}
       ${kpi(r.todayAppended && S.today.amtSource ? `全天量能（${S.today.amtSource.replace('全天', '')}）` : '成交额', isNum(f.amt) ? `${fmtYi(f.amt).replace(' ', '')} <small>×${isNum(f.vr) ? f.vr.toFixed(2) : '—'}</small>` : '—', '',
         r.todayAppended ? (isNum(vsY) ? `较昨日 <span class="${sign(vsY)}">${fmtPct(vsY, 1)}</span>` : '较昨日 —') : '')}
-      ${kpi('全指 RSI12', isNum(f.rsi) ? `${f.rsi.toFixed(1)} <small>${rsiZone(f.rsi)}</small>` : '—', isNum(f.rsi) && f.rsi < 30 ? 'g' : isNum(f.rsi) && f.rsi > 70 ? 'r' : '', '（&lt;30 超跌 · 30–70 中性 · &gt;70 超买）')}
+      ${kpi('全指 RSI12', isNum(f.rsi) ? `${f.rsi.toFixed(1)} <small>${rsiZone(f.rsi)}</small>` : '—', isNum(f.rsi) && f.rsi < 30 ? 'g' : isNum(f.rsi) && f.rsi > 70 ? 'r' : '', '（&lt;30 超跌 · &gt;70 超买）')}
     </div>
     <div class="steps" title="二次探底进度">${steps}</div>
     <div class="steps-lab">${F1_STEPS.map(s => `<span>${s}</span>`).join('')}</div>
@@ -471,7 +471,7 @@ function extraHTML(f) {
 function logHTML() {
   const log = load(`log.${S.calendar?.date}`, []).slice(0, 2);
   const ev = S.result.events.slice(-4).reverse();
-  return `<section class="card log-card desk-only"><h3>提醒与切换<span class="cnt">状态记录</span></h3><ul class="log">
+  return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">状态记录</span></h3><ul class="log">
     ${log.map(x => `<li><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b>${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}
     ${ev.map(e => `<li><time>${esc(e.date.slice(5))}</time><span class="event">${esc(e.event)} → ${esc(STAGE_META[e.to]?.name ?? e.to)}（${esc(e.position)}）</span></li>`).join('')}</ul></section>`;
 }
