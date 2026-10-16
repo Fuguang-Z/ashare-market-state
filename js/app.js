@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016n';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016n';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016n';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016n';
+import ds from './datasource.js?v=20261016o';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016o';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016o';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016o';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
@@ -125,7 +125,7 @@ const ALL_BOARDS = Object.values(FAMILIES).flat();
  * 只有大科技多轮发酵、按分支列出；其余一律归纳为大类。今日/近 5 日 = 成员板块等权。
  */
 const SECTORS = [
-  { name: '大科技', branch: true, boards: ['881121', '886042', '886033', '881129', '885959', '881270', '881124', '885800', '886112', '886050'] },
+  { name: '大科技', branch: true, boards: ['881121', '886042', '886033', '881129', '885959', '881270', '886112', '886050'] },
   { name: '商业航天', boards: ['886078', '885574'] },   // 商业航天、卫星导航，不再展开分支
   { name: '军工', boards: ['885700', '881166', '881276'] },
   { name: 'AI应用', boards: ['881272', '886108', '881275', '881164'] },   // 含传媒
@@ -138,7 +138,7 @@ const SECTORS = [
   { name: '房地产', boards: ['881153'] },
   { name: '电力', boards: ['881145'] },
   { name: '金融', boards: ['881155', '881157', '881156'] },
-  { name: '消费零售', boards: ['881158'] },
+  { name: '消费零售', boards: ['881158', '881124', '885800'] },   // 零售、消费电子、消费电子概念
   { name: '农业', boards: ['881101', '881103'] },
 ];
 // 东财热门板块 → 大类（关键词，先到先得）
@@ -147,7 +147,8 @@ const SECTOR_KEYS = [
   ['低空经济', ['低空', '飞行汽车', 'eVTOL', '无人机', '通用航空']],
   ['军工', ['军工', '兵装', '航空装备', '航海装备', '国防', '军民融合', '航母', '大飞机', '民爆', '船舶', '军用']],
   ['智能驾驶', ['驾驶', '汽车', '车联网', '车牌', '压铸', '热管理', '整车', '零部件', '车路']],
-  ['大科技', ['半导体', '芯片', '存储', 'CPO', '光模块', 'PCB', '元件', 'MLCC', '消费电子', '算力', '通信', '电子', '服务器', '液冷', '光刻', '先进封装']],
+  ['消费零售', ['消费电子', '零售', '商超', '百货', '电商', '免税', '食品', '白酒', '饮料', '家电', '鸡肉', '乳业', '折叠屏', '可穿戴']],
+  ['大科技', ['半导体', '芯片', '存储', 'CPO', '光模块', 'PCB', '元件', 'MLCC', '算力', '通信', '电子', '服务器', '液冷', '光刻', '先进封装']],
   ['AI应用', ['AI', '软件', '游戏', '数据要素', '多模态', '智能体', '营销', '短剧', '传媒', '出版', '影视', '文化', '图书']],
   ['机器人', ['机器人', '减速器', '具身']],
   ['医药', ['药', '医', 'CRO', '生物', '疫苗']],
@@ -156,7 +157,6 @@ const SECTOR_KEYS = [
   ['房地产', ['地产', '房产', '物业', '租售', '租赁', '建材', '装修', '水泥']],
   ['电力', ['电力', '火电', '绿电', '水电', '核电', '电网', '电设备']],
   ['金融', ['银行', '证券', '保险', '券商', '金融']],
-  ['消费零售', ['零售', '商超', '百货', '电商', '免税', '食品', '白酒', '饮料', '家电', '鸡肉', '乳业']],
   ['农业', ['农业', '种业', '粮食', '养殖', '种植', '猪', '渔', '化肥']],
 ];
 const sectorOfName = name => SECTOR_KEYS.find(([, ks]) => ks.some(k => name.includes(k)))?.[0] ?? null;
@@ -522,7 +522,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16n';
+const APP_VERSION = '2026.10.16o';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
