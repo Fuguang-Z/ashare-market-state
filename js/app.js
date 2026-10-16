@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016m';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016m';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016m';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016m';
+import ds from './datasource.js?v=20261016n';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016n';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016n';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016n';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
@@ -122,11 +122,11 @@ function withToday(H) {
 const ALL_BOARDS = Object.values(FAMILIES).flat();
 /**
  * 板块强弱的大类（展示用，不参与状态机判定）：本地数据近一年各轮行情的热门方向。
- * 只有科技类（大科技、商业航天）多轮发酵、按分支列出；其余一律归纳为大类。今日/近 5 日 = 成员板块等权。
+ * 只有大科技多轮发酵、按分支列出；其余一律归纳为大类。今日/近 5 日 = 成员板块等权。
  */
 const SECTORS = [
   { name: '大科技', branch: true, boards: ['881121', '886042', '886033', '881129', '885959', '881270', '881124', '885800', '886112', '886050'] },
-  { name: '商业航天', branch: true, boards: ['886078', '885574'] },
+  { name: '商业航天', boards: ['886078', '885574'] },   // 商业航天、卫星导航，不再展开分支
   { name: '军工', boards: ['885700', '881166', '881276'] },
   { name: 'AI应用', boards: ['881272', '886108', '881275', '881164'] },   // 含传媒
   { name: '低空经济', boards: ['886067'] },
@@ -522,7 +522,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16m';
+const APP_VERSION = '2026.10.16n';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
