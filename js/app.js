@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016l';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016l';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016l';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016l';
+import ds from './datasource.js?v=20261016m';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016m';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016m';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016m';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
@@ -130,7 +130,7 @@ const SECTORS = [
   { name: '军工', boards: ['885700', '881166', '881276'] },
   { name: 'AI应用', boards: ['881272', '886108', '881275', '881164'] },   // 含传媒
   { name: '低空经济', boards: ['886067'] },
-  { name: '智能驾驶·汽车', boards: ['885736', '881125', '881126'] },
+  { name: '智能驾驶', boards: ['885736', '881125', '881126'] },   // 无人驾驶、汽车整车、汽车零部件
   { name: '机器人', boards: ['885517'] },
   { name: '医药', boards: ['881140', '881141', '881175', '886015'] },
   { name: '新能源', boards: ['881281', '885710', '881279', '881280'] },
@@ -146,7 +146,7 @@ const SECTOR_KEYS = [
   ['商业航天', ['航天', '卫星', '空间站', '火箭', '北斗']],
   ['低空经济', ['低空', '飞行汽车', 'eVTOL', '无人机', '通用航空']],
   ['军工', ['军工', '兵装', '航空装备', '航海装备', '国防', '军民融合', '航母', '大飞机', '民爆', '船舶', '军用']],
-  ['智能驾驶·汽车', ['驾驶', '汽车', '车联网', '压铸', '热管理', '整车', '零部件', '车路']],
+  ['智能驾驶', ['驾驶', '汽车', '车联网', '车牌', '压铸', '热管理', '整车', '零部件', '车路']],
   ['大科技', ['半导体', '芯片', '存储', 'CPO', '光模块', 'PCB', '元件', 'MLCC', '消费电子', '算力', '通信', '电子', '服务器', '液冷', '光刻', '先进封装']],
   ['AI应用', ['AI', '软件', '游戏', '数据要素', '多模态', '智能体', '营销', '短剧', '传媒', '出版', '影视', '文化', '图书']],
   ['机器人', ['机器人', '减速器', '具身']],
@@ -522,7 +522,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16l';
+const APP_VERSION = '2026.10.16m';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
