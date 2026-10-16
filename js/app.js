@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016i';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016i';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016i';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016i';
+import ds from './datasource.js?v=20261016j';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016j';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016j';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016j';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -120,6 +120,46 @@ function withToday(H) {
 /* ---------------- 数据轮 ---------------- */
 
 const ALL_BOARDS = Object.values(FAMILIES).flat();
+/**
+ * 板块强弱的大类（展示用，不参与状态机判定）：本地数据近一年各轮行情的热门方向。
+ * 只有科技类（大科技、商业航天）多轮发酵、按分支列出；其余一律归纳为大类。今日/近 5 日 = 成员板块等权。
+ */
+const SECTORS = [
+  { name: '大科技', branch: true, boards: ['881121', '886042', '886033', '881129', '885959', '881270', '881124', '885800', '886112', '886050', '885736'] },
+  { name: '商业航天', branch: true, boards: ['886078', '885574'] },
+  { name: '军工', boards: ['885700', '881166', '881276'] },
+  { name: 'AI应用', boards: ['881272', '886108', '881275'] },
+  { name: '机器人', boards: ['885517'] },
+  { name: '医药', boards: ['881140', '881141', '881175', '886015'] },
+  { name: '新能源', boards: ['881281', '885710', '881279', '881280'] },
+  { name: '资源', boards: ['881169', '885530', '885343', '885914'], pref: true },
+  { name: '房地产', boards: ['881153'] },
+  { name: '电力', boards: ['881145'] },
+  { name: '金融', boards: ['881155', '881157', '881156'] },
+  { name: '消费零售', boards: ['881158'] },
+  { name: '农业', boards: ['881101', '881103'] },
+  { name: '传媒出版', boards: ['881164'] },
+];
+// 东财热门板块 → 大类（关键词，先到先得）
+const SECTOR_KEYS = [
+  ['商业航天', ['航天', '卫星', '空间站', '火箭', '北斗']],
+  ['军工', ['军工', '兵装', '航空装备', '航海装备', '国防', '军民融合', '航母', '大飞机', '无人机', '民爆', '船舶', '通用航空', '低空', '飞行汽车', '军用']],
+  ['大科技', ['半导体', '芯片', '存储', 'CPO', '光模块', 'PCB', '元件', 'MLCC', '消费电子', '算力', '通信', '电子', '服务器', '液冷', '驾驶', '汽车', '光刻', '先进封装']],
+  ['AI应用', ['AI', '软件', '游戏', '数据要素', '多模态', '智能体', '营销', '短剧']],
+  ['机器人', ['机器人', '减速器', '具身']],
+  ['医药', ['药', '医', 'CRO', '生物', '疫苗']],
+  ['新能源', ['电池', '锂', '光伏', '风电', '储能', '固态', '氢', '燃料电池']],
+  ['资源', ['黄金', '贵金属', '稀土', '煤', '有色', '铜', '钨', '锗']],
+  ['房地产', ['地产', '房产', '物业', '租售', '租赁', '建材', '装修', '水泥']],
+  ['电力', ['电力', '火电', '绿电', '水电', '核电', '电网', '电设备']],
+  ['金融', ['银行', '证券', '保险', '券商', '金融']],
+  ['消费零售', ['零售', '商超', '百货', '电商', '免税', '食品', '白酒', '饮料', '家电', '鸡肉', '乳业']],
+  ['农业', ['农业', '种业', '粮食', '养殖', '种植', '猪', '渔', '化肥']],
+  ['传媒出版', ['传媒', '出版', '影视', '文化', '图书']],
+];
+const sectorOfName = name => SECTOR_KEYS.find(([, ks]) => ks.some(k => name.includes(k)))?.[0] ?? null;
+const EXTRA_BOARDS = [...new Set(SECTORS.flatMap(x => x.boards))].filter(c => !ALL_BOARDS.includes(c));
+const POLL_BOARDS = [...ALL_BOARDS, ...EXTRA_BOARDS];
 
 async function ordinaryRound() {
   const date = S.calendar.date;
@@ -130,8 +170,8 @@ async function ordinaryRound() {
   if (th.ok && !th.partial) S.today.themes = { date, rows: th.rows, counts: th.counts, top: themeTop(th.rows.map(r => r.reasonText)) };
   await hotRound();
   // 同花顺板块轮询
-  const n = ALL_BOARDS.length, pick = [];
-  for (let k = 0; k < BOARDS_PER_TICK; k++) pick.push(ALL_BOARDS[(S.boardCursor + k) % n]);
+  const n = POLL_BOARDS.length, pick = [];
+  for (let k = 0; k < BOARDS_PER_TICK; k++) pick.push(POLL_BOARDS[(S.boardCursor + k) % n]);
   S.boardCursor = (S.boardCursor + BOARDS_PER_TICK) % n;
   const tb = await ds.getTHSBoardToday([...new Set(pick)]);
   for (const r of tb.rows ?? []) S.today.boards[r.code] = r;
@@ -180,16 +220,30 @@ async function hotRound() {
     if (codes.length) { const q = await ds.getBoardQuotes(codes); if (q.ok) for (const x of q.rows) S.hotLive[x.code] = { ...S.hotLive[x.code], ...x, type: S.hotLive[x.code]?.type ?? x.type, at: Date.now() }; }
   }
 }
-/** 板块强弱：只列热门板块池（近 10 个交易日上榜 + 自选观察 + 盘中今日新入池） */
-function hotRows() {
-  const today = S.calendar?.date, pool = S.hotPool?.boards ?? [];
-  const rows = pool.map(b => {
-    const live = S.hotLive[b.code];
-    const tag = b.watch ? '自选观察' : b.firstDate === today ? '今日入池' : `入池 ${b.firstDate.slice(5)}`;
-    return { code: b.code, name: b.alias || b.name, type: b.type, pct: live?.pct ?? (S.hotPool.asOf === today ? b.pct : null), p5: live?.p5 ?? b.p5, leader: live?.leader ?? b.leader, tag, hotDays: b.hotDates?.length ?? 0 };
+/** 大类行：成员板块等权（今日、近 5 日链乘）；科技类附分支；按东财当日热门 / 近 10 日热门板块标注热点 */
+function sectorRows(j, fs) {
+  const H = S.result.H, today = S.calendar?.date;
+  const ret = (c, d) => { const x = H.boards[c]?.close; return x && isNum(x[d]) && isNum(x[d - 1]) ? x[d] / x[d - 1] - 1 : null; };
+  const mean = v => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
+  const one = c => { const p1 = ret(c, j); let k = 1, ok = true; for (let d = j - 4; d <= j; d++) { const r = ret(c, d); if (r === null) { ok = false; break; } k *= 1 + r; } return { p1: p1 === null ? null : p1 * 100, p5: ok ? (k - 1) * 100 : null }; };
+  const hotT = {}, hotR = {};
+  for (const x of hotToday()) { const s = sectorOfName(x.name); if (s) (hotT[s] ??= []).push(x.name); }
+  for (const b of S.hotPool?.boards ?? []) { const s = sectorOfName(b.name); if (s && b.lastHotDate && b.lastHotDate !== today) { const d = b.lastHotDate.slice(5); if (!hotR[s] || hotR[s] < d) hotR[s] = d; } }
+  if (S.hotPool?.asOf === today) for (const b of S.hotPool.boards) if (b.lastHotDate === today) { const s = sectorOfName(b.name); if (s && !(hotT[s] ?? []).includes(b.name)) (hotT[s] ??= []).push(b.name); }
+  const key = fs.k === 'fT' ? 'p1' : 'p5';
+  const rows = SECTORS.map(sec => {
+    const day = d => mean(sec.boards.map(c => ret(c, d)).filter(v => v !== null));
+    const r1 = day(j); let k = 1, ok = true;
+    for (let d = j - 4; d <= j; d++) { const r = day(d); if (r === null) { ok = false; break; } k *= 1 + r; }
+    const branches = sec.branch ? sec.boards.map(c => ({ name: S.seed.boards[c]?.name ?? c, ...one(c) }))
+      .sort((a, b) => (isNum(a[key]) ? 0 : 1) - (isNum(b[key]) ? 0 : 1) || fs.d * ((a[key] ?? 0) - (b[key] ?? 0))) : null;
+    const names = sec.boards.map(c => S.seed.boards[c]?.name ?? c).join('、');
+    const hs = hotT[sec.name];
+    return { name: sec.name, pref: sec.pref, p1: r1 === null ? null : r1 * 100, p5: ok ? (k - 1) * 100 : null, branches,
+      hotToday: hs?.length ?? 0, hotRecent: hotR[sec.name] ?? null,
+      title: `成分：${names}${hs?.length ? `\n今日热门：${hs.join('、')}` : ''}${hotR[sec.name] ? `\n近期热点：${hotR[sec.name]}` : ''}` };
   });
-  const have = new Set(rows.map(r => r.code));
-  for (const x of hotToday()) if (!have.has(x.code)) rows.push({ code: x.code, name: x.name, type: x.type, pct: x.pct, p5: x.p5, leader: x.leader, tag: '今日新入池', fresh: true });
+  rows.sort((a, b) => (isNum(a[key]) ? 0 : 1) - (isNum(b[key]) ? 0 : 1) || fs.d * ((a[key] ?? 0) - (b[key] ?? 0)));
   return rows;
 }
 
@@ -210,7 +264,7 @@ async function backfillRound() {
   const miss = missingDates();
   const ex = S.extra;
   // 板块：每次最多 6 个，本轮两批
-  const needBoards = ALL_BOARDS.filter(c => miss.some(d => !isNum(ex.boards[c]?.[d])));
+  const needBoards = POLL_BOARDS.filter(c => miss.some(d => !isNum(ex.boards[c]?.[d])));
   for (let k = 0; k < 2 && needBoards.length; k++) {
     const chunk = needBoards.splice(0, 6);
     const r = await ds.getBoardRecentDaily(chunk.map(c => `ths:${c}`), Math.min(60, miss.length + 1));
@@ -454,7 +508,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16i';
+const APP_VERSION = '2026.10.16j';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -670,7 +724,7 @@ function extraHTML(f) {
   const partial = S.result.todayAppended && tb < ALL_BOARDS.length;
   // 今日板块未载入完整时，用最近一个板块数据齐全的交易日（补数期间昨日也可能未齐），避免只显示部分板块或空表
   const H = S.result.H;
-  const full = j => ALL_BOARDS.filter(c => isNum(H.boards[c]?.close[j])).length >= ALL_BOARDS.length - 2;
+  const full = j => POLL_BOARDS.filter(c => isNum(H.boards[c]?.close[j])).length >= POLL_BOARDS.length - 2;
   let j = H.dates.length - 1;
   if (partial || !full(j)) { while (j > 0 && !full(j)) j--; }
   const famOf = Object.fromEntries(Object.entries(FAMILIES).flatMap(([fam, cs]) => cs.map(c => [c, fam])));
@@ -686,13 +740,14 @@ function extraHTML(f) {
   const byP5 = [...rows].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
   const th = (k, label) => `<th><button type="button" class="sort${fs.k === k ? '' : ' off'}" data-sort="${k}" title="点击按${label}排序：${fs.k === k && fs.d === -1 ? '改为从小到大' : '从大到小'}">${label}<span class="ar">${fs.k === k ? (fs.d === -1 ? '↓' : '↑') : '↕'}</span></button></th>`;
   const head = j < H.dates.length - 1 || partial ? `截至 ${esc(H.dates[j].slice(5))} · 今日板块 ${tb}/${ALL_BOARDS.length}` : `${rows.length} 个板块 · 按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}`;
-  const hot = hotRows();
-  if (hot.length) {
-    const hk = fs.k === 'fT' ? 'pct' : 'p5';
-    hot.sort((a, b) => (isNum(a[hk]) ? 0 : 1) - (isNum(b[hk]) ? 0 : 1) || fs.d * ((a[hk] ?? 0) - (b[hk] ?? 0)));
-    const hb = [...hot].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
-    const fresh = hot.filter(r => r.fresh).length;
-    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">近期热门 ${hot.length} 个${fresh ? ` · 今日新入池 ${fresh}` : ''} · 按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><table class="mini hot-table"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${hot.map(r => `<tr class="${r.fresh || r.tag === '今日入池' ? 'fresh' : ''}" title="${esc(`${r.type === 'industry' ? '行业' : '概念'}板块 · ${r.tag}${r.hotDays > 1 ? ` · 近期上榜 ${r.hotDays} 次` : ''}${r.leader ? ` · 领涨 ${r.leader}` : ''}`)}"><td>${esc(r.name)} <small class="muted">${esc(r.tag)}</small></td><td class="${sign(r.pct)}">${fmtPct(r.pct)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>
+  const sec = sectorRows(j, fs);
+  if (sec.length) {
+    const hb = [...sec].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
+    const asOf = j < H.dates.length - 1 || partial ? `截至 ${esc(H.dates[j].slice(5))}` : '今日';
+    const td = (v, d = 2) => `<td class="${sign(v)}">${fmtPct(v, d)}</td>`;
+    const body = sec.map(r => `<tr class="sec${r.hotToday ? ' hot' : ''}" title="${esc(r.title)}"><td>${esc(r.name)}${r.pref ? ' <small class="muted">偏好不参与</small>' : ''}${r.hotToday ? ` <small class="hot-tag">今日热点 ×${r.hotToday}</small>` : r.hotRecent ? ` <small class="muted">近期热点 ${esc(r.hotRecent)}</small>` : ''}</td>${td(r.p1)}${td(r.p5, 1)}</tr>`
+      + (r.branches ?? []).map(b => `<tr class="br"><td>└ ${esc(b.name)}</td>${td(b.p1)}${td(b.p5, 1)}</tr>`).join('')).join('');
+    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${sec.length} 个大类 · ${asOf} · 按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><table class="mini sec-table"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${body}</tbody></table>
     <div class="fam-line mob-only"><p><b>强</b>${hb.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${hb.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
   }
   return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${head}</span></h3><table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>
@@ -759,7 +814,7 @@ function statusChips() {
   out.push(`<span class="chip"><i class="live ${live ? '' : 'off'}"></i><b class="num">${esc(c?.time?.slice(0, 5) ?? '--:--')}</b> ${esc(p.label)}</span>`);
   const q = S.today.quotes;
   out.push(`<span class="chip ${q?.ok ? '' : 'warn'}">指数 <b class="num">${q?.ok ? esc(q.rows[0]?.sourceTime?.slice(11, 16) ?? '') : '未取得'}</b></span>`);
-  const tb = Object.values(S.today.boards).filter(b => b.sourceDate === c?.date).length;
+  const tb = ALL_BOARDS.filter(code => S.today.boards[code]?.sourceDate === c?.date).length;
   out.push(`<span class="chip ${r?.todayAppended && tb < 34 ? 'warn' : ''}">板块今日 <b class="num">${tb}/${ALL_BOARDS.length}</b></span>`);
   const tv = S.today.turnover;
   const yAmt = r?.todayAppended ? r.yesterday?.amt : null;

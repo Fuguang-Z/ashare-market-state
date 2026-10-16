@@ -117,7 +117,7 @@ export function features(H, FI, i, P = PARAMS) {
   const tri = (ok, v) => (ok ? v : null);
   const A1 = tri(isNum(sh[i]) && isNum(m5) && isNum(m10) && isNum(m5p), sh[i] > m5 && sh[i] > m10 && m5 > m5p);
   const D1 = tri(isNum(sh[i]) && isNum(m5) && isNum(m5p), sh[i] < m5 && m5 < m5p);
-  const codes = Object.keys(H.boards).sort();
+  const codes = Object.keys(H.boards).filter(c => FAMILY_OF[c]).sort();   // 只用族群板块（展示用板块不参与判定）
   const pt = {}, p5b = {};
   for (const c of codes) {
     const v = pct(H.boards[c].close, i); if (v !== null) pt[c] = v;
