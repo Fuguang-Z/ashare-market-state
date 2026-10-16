@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016h';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016h';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016h';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016h';
+import ds from './datasource.js?v=20261016i';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016i';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016i';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016i';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -20,7 +20,7 @@ const S = {
   seed: null, etfMap: null, sourceMap: null,
   indexDaily: null,          // { sh000001: rows, sz399001: rows, sh000985: rows }（已完成日）
   today: { quotes: null, turnover: null, pools: {}, breadth: null, boards: {}, top: null, wide: null, themes: null },
-  stockK: {}, kQueue: new Set(), emo: null,
+  stockK: {}, kQueue: new Set(), emo: null, hotPool: null, hotLive: {}, hotRank: {}, hotTick: 0,
   calendar: null, tick: 0, busy: false, boardCursor: 0, result: null, lastError: null, lastTickAt: null,
   extra: null,               // 种子之后的已完成日补数：{ boards:{code:{date:close}}, limits:{date:{...}} }，缓存在浏览器
   backfill: { missing: [], boardsDone: 0, limitsDone: 0, complete: true },
@@ -89,9 +89,10 @@ function withToday(H) {
   if (tv?.ok && tv.estimated && isNum(tv.projectedFullDay)) { amtToday = tv.projectedFullDay; t.amtSource = '全天预估'; }
   else if (tv?.ok && tv.phase === 'reported-observation-only' && tv.sourceDate === date && isNum(tv.cumulativeAmount)) { amtToday = tv.cumulativeAmount; t.amtSource = '收盘成交额'; }
   else if (t.lastProjected?.date === date) { amtToday = t.lastProjected.value; t.amtSource = '全天预估·沿用'; }
-  const pools = t.pools[date] ?? {};
-  const up = pools.up, down = pools.down, broken = pools.broken;
-  const lbc = up?.rows?.map(r => r.consecutiveLimitUps).filter(isNum) ?? [];
+  // 涨跌停统计：同花顺涨停池（涨停、跌停、炸板数取源 today 统计；连板取「N天N板」与「首板」标签），与历史数据同口径
+  const lim = t.themes?.date === date ? t.themes : null;
+  const lbc = lim ? lim.rows.map(r => r.consecutive).filter(isNum) : [];
+  const cnt = k => (lim && isNum(lim.counts?.[k]) ? lim.counts[k] : null);
   const boards = {};
   for (const [c, b] of Object.entries(H.boards)) {
     const live = t.boards[c];
@@ -103,10 +104,10 @@ function withToday(H) {
     sh: { close: [...H.sh.close, shq.price], high: [...H.sh.high, shq.high ?? shq.price], low: [...H.sh.low, shq.low ?? shq.price] },
     amt: [...H.amt, amtToday], c985,
     limits: {
-      up: [...H.limits.up, up ? up.count : null], down: [...H.limits.down, down ? down.count : null],
-      broken: [...H.limits.broken, broken ? broken.count : null],
-      height: [...H.limits.height, up ? (lbc.length ? Math.max(...lbc) : 0) : null],
-      lad3: [...H.limits.lad3, up ? lbc.filter(v => v >= 3).length : null],
+      up: [...H.limits.up, cnt('up')], down: [...H.limits.down, cnt('down')],
+      broken: [...H.limits.broken, cnt('broken')],
+      height: [...H.limits.height, lim ? (lbc.length ? Math.max(...lbc) : 0) : null],
+      lad3: [...H.limits.lad3, lim ? lbc.filter(v => v >= 3).length : null],
       theme: [...H.limits.theme, t.themes?.date === date ? t.themes.top.count : null],
       themeName: [...H.limits.themeName, t.themes?.date === date ? t.themes.top.name : null],
     },
@@ -124,15 +125,10 @@ async function ordinaryRound() {
   const date = S.calendar.date;
   const q = await ds.getIndexQuotes(); if (q.ok || !S.today.quotes) S.today.quotes = q;
   const tv = await ds.getProjectedTurnover(); if (tv.ok || !S.today.turnover) S.today.turnover = tv;
-  // 东财每分钟 3 次：涨停、跌停、炸板；每 3 轮把炸板换成涨跌分布
-  const kinds = S.tick % 3 === 2 ? ['up', 'down'] : ['up', 'down', 'broken'];
-  const pools = await ds.getLimitPools({ date, kinds });
-  const store = S.today.pools[date] ?? (S.today.pools = { [date]: {} })[date];
-  for (const [k, v] of Object.entries(pools.pools ?? {})) if (v?.ok) store[k] = v;
-  if (S.tick % 3 === 2) { const b = await ds.getMarketBreadth(); if (b.ok) S.today.breadth = b; }
-  // 同花顺涨停池：题材集中度（板块效应）与情绪龙头
+  // 同花顺涨停池：涨停/跌停/炸板统计、连板梯队、题材（情绪周期）；东财额度留给热门板块
   const th = await ds.getTHSLimitThemes(date);
-  if (th.ok && !th.partial) S.today.themes = { date, rows: th.rows, top: themeTop(th.rows.map(r => r.reasonText)) };
+  if (th.ok && !th.partial) S.today.themes = { date, rows: th.rows, counts: th.counts, top: themeTop(th.rows.map(r => r.reasonText)) };
+  await hotRound();
   // 同花顺板块轮询
   const n = ALL_BOARDS.length, pick = [];
   for (let k = 0; k < BOARDS_PER_TICK; k++) pick.push(ALL_BOARDS[(S.boardCursor + k) % n]);
@@ -147,6 +143,54 @@ async function ordinaryRound() {
 async function wideRound() {
   const tv = await ds.getProjectedTurnover(); if (tv.ok) S.today.turnover = tv;
   const w = await ds.getWideRangeCandidates({ minAmount: 5e8, n: 8 }); if (w.ok) S.today.wide = w;
+}
+
+/* ---------------- 热门板块池 ---------------- */
+// 入池规则与 研究/历史数据/hot_boards.py 一致：概念前 20 且 ≥3%（剔除统计性伪板块）、行业前 10 且 ≥2.5%（剔除三级细分）
+const HOT_RULE = { concept: { top: 20, min: 3.0 }, industry: { top: 10, min: 2.5 } };
+const HOT_EXCLUDE = ['昨日', '连板', '涨停', '跌停', '热股', '融资', '融券', '沪股通', '深股通', '标准普尔', '标普', 'MSCI', '富时', '重仓', '预增', '预盈', '预亏',
+  '破净', '低价', '次新', '送转', 'ST', '注册制', '创业板综', '上证', '深证', '中证', 'HS300', '沪深300', 'AH股', 'B股', '百元', '转债', 'QFII',
+  '社保', '基金', '茅指数', '宁组合', '做市', '北交所', '专精特新', '股权激励', '举牌', '高送转', '参股', '壳资源', '央企改革', '国企改革', '地方国资',
+  '证金', '汇金', '养老金', '保险重仓', '券商重仓', '机构', '龙虎榜', '回购', '分拆', '退市', '超跌', '贬值受益', '升值受益', '长江三角', '京津冀', '粤港澳',
+  '雄安', '西部大开发', '成渝', '东北振兴', '自贸区', '一带一路', '核准制', '季报', '年报', '中报', '业绩'];
+function hotToday() {
+  const out = [];
+  for (const type of ['concept', 'industry']) {
+    const r = S.hotRank[type]; if (!r || r.date !== S.calendar?.date) continue;
+    let rank = 0;
+    for (const x of r.rows) {
+      if (type === 'concept' && HOT_EXCLUDE.some(k => x.name.includes(k))) continue;
+      if (type === 'industry' && x.name.endsWith('Ⅲ')) continue;
+      rank++;
+      if (rank <= HOT_RULE[type].top && isNum(x.pct) && x.pct >= HOT_RULE[type].min) out.push({ ...x, type, rank });
+    }
+  }
+  return out;
+}
+/** 盘中：每轮一次东财请求——轮流取概念/行业排行第 1 页（识别今日新入池）与池内板块批量报价 */
+async function hotRound() {
+  S.hotTick++;
+  const k = S.hotTick % 3, today = S.calendar?.date;
+  if (k !== 0) {
+    const type = k === 1 ? 'concept' : 'industry';
+    const r = await ds.getBoardRanking({ type, page: 1 });
+    if (r.ok) { S.hotRank[type] = { date: today, at: Date.now(), rows: r.rows }; for (const x of r.rows) S.hotLive[x.code] = { ...x, type, at: Date.now() }; }
+  } else {
+    const codes = (S.hotPool?.boards ?? []).map(b => b.code).filter(c => !S.hotLive[c] || Date.now() - S.hotLive[c].at > 120000).slice(0, 60);
+    if (codes.length) { const q = await ds.getBoardQuotes(codes); if (q.ok) for (const x of q.rows) S.hotLive[x.code] = { ...S.hotLive[x.code], ...x, type: S.hotLive[x.code]?.type ?? x.type, at: Date.now() }; }
+  }
+}
+/** 板块强弱：只列热门板块池（近 10 个交易日上榜 + 自选观察 + 盘中今日新入池） */
+function hotRows() {
+  const today = S.calendar?.date, pool = S.hotPool?.boards ?? [];
+  const rows = pool.map(b => {
+    const live = S.hotLive[b.code];
+    const tag = b.watch ? '自选观察' : b.firstDate === today ? '今日入池' : `入池 ${b.firstDate.slice(5)}`;
+    return { code: b.code, name: b.alias || b.name, type: b.type, pct: live?.pct ?? (S.hotPool.asOf === today ? b.pct : null), p5: live?.p5 ?? b.p5, leader: live?.leader ?? b.leader, tag, hotDays: b.hotDates?.length ?? 0 };
+  });
+  const have = new Set(rows.map(r => r.code));
+  for (const x of hotToday()) if (!have.has(x.code)) rows.push({ code: x.code, name: x.name, type: x.type, pct: x.pct, p5: x.p5, leader: x.leader, tag: '今日新入池', fresh: true });
+  return rows;
 }
 
 /** 情绪周期需要的个股日 K（高标见顶判断）：每轮最多 4 只 */
@@ -177,25 +221,14 @@ async function backfillRound() {
       for (const row of g.rows) if (miss.includes(row.date)) ex.boards[code][row.date] = row.close;
     }
   }
-  // 涨跌停：每轮一个交易日（东财每分钟 3 次）
-  const d = miss.find(x => !ex.limits[x]);
+  // 涨跌停与涨停池：同花顺一次请求（每轮一个交易日）
+  const d = miss.find(x => !ex.limits[x] || !ex.pools?.[x]);
   if (d) {
-    const p = await ds.getLimitPools({ date: d, kinds: ['up', 'down', 'broken'] });
-    const up = p.pools?.up, dn = p.pools?.down, br = p.pools?.broken;
-    if (up?.ok && dn?.ok && br?.ok) {
-      const lbc = up.rows.map(r => r.consecutiveLimitUps).filter(isNum);
-      const th = await ds.getTHSLimitThemes(d), full = th.ok && !th.partial, tt = full ? themeTop(th.rows.map(r => r.reasonText)) : null;
-      if (full) ex.pools[d] = th.rows.map(r => [r.code, r.name, r.reasonText]);
-      ex.limits[d] = { up: up.count, down: dn.count, broken: br.count, height: lbc.length ? Math.max(...lbc) : 0, lad3: lbc.filter(v => v >= 3).length, theme: tt?.count ?? null, themeName: tt?.name ?? null };
-    }
-  }
-  // 涨跌停已补、但题材涨停池缺失或不完整的日子：单独重试题材
-  const dp = miss.find(x => ex.limits[x] && !ex.pools?.[x] && x !== d);
-  if (dp) {
-    const th = await ds.getTHSLimitThemes(dp);
-    if (th.ok && !th.partial) {
-      ex.pools[dp] = th.rows.map(r => [r.code, r.name, r.reasonText]);
-      const tt = themeTop(th.rows.map(r => r.reasonText)); ex.limits[dp].theme = tt.count; ex.limits[dp].themeName = tt.name;
+    const th = await ds.getTHSLimitThemes(d);
+    if (th.ok && !th.partial && th.counts && isNum(th.counts.up)) {
+      const lbc = th.rows.map(r => r.consecutive).filter(isNum), tt = themeTop(th.rows.map(r => r.reasonText));
+      ex.pools[d] = th.rows.map(r => [r.code, r.name, r.reasonText]);
+      ex.limits[d] = { up: th.counts.up, down: th.counts.down, broken: th.counts.broken, height: lbc.length ? Math.max(...lbc) : 0, lad3: lbc.filter(v => v >= 3).length, theme: tt.count, themeName: tt.name };
     }
   }
   for (const c of Object.keys(ex.boards)) for (const day of Object.keys(ex.boards[c])) if (day <= S.seed.through) delete ex.boards[c][day];
@@ -214,6 +247,7 @@ function updateBackfill() {
 async function warmup() {
   if (!S.seed) S.seed = await staticJSON('market_seed.json');
   if (!S.timeline) S.timeline = await staticJSON('regime_timeline.json').catch(() => null);
+  if (!S.hotPool) S.hotPool = await staticJSON('hot_boards.json').catch(() => null);
   if (!S.etfMap) S.etfMap = await staticJSON('board_etf_map.json').catch(() => null);
   if (!S.sourceMap) S.sourceMap = await staticJSON('board_source_map.json').catch(() => null);
   if (!S.indexDaily || S.indexDaily.date !== S.calendar.date) {
@@ -264,6 +298,7 @@ async function tick() {
       else await ordinaryRound();
       S.tick++;
     }
+    if (!needWarm && !S.calendar.refreshRecommended && S.hotTick < 3) await hotRound();
     if (!needWarm && S.kQueue.size) await klineRound();
     S.lastError = null;
   } catch (e) { S.lastError = String(e.message ?? e); }
@@ -419,7 +454,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16h';
+const APP_VERSION = '2026.10.16i';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -651,6 +686,15 @@ function extraHTML(f) {
   const byP5 = [...rows].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
   const th = (k, label) => `<th><button type="button" class="sort${fs.k === k ? '' : ' off'}" data-sort="${k}" title="点击按${label}排序：${fs.k === k && fs.d === -1 ? '改为从小到大' : '从大到小'}">${label}<span class="ar">${fs.k === k ? (fs.d === -1 ? '↓' : '↑') : '↕'}</span></button></th>`;
   const head = j < H.dates.length - 1 || partial ? `截至 ${esc(H.dates[j].slice(5))} · 今日板块 ${tb}/${ALL_BOARDS.length}` : `${rows.length} 个板块 · 按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}`;
+  const hot = hotRows();
+  if (hot.length) {
+    const hk = fs.k === 'fT' ? 'pct' : 'p5';
+    hot.sort((a, b) => (isNum(a[hk]) ? 0 : 1) - (isNum(b[hk]) ? 0 : 1) || fs.d * ((a[hk] ?? 0) - (b[hk] ?? 0)));
+    const hb = [...hot].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
+    const fresh = hot.filter(r => r.fresh).length;
+    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">近期热门 ${hot.length} 个${fresh ? ` · 今日新入池 ${fresh}` : ''} · 按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><table class="mini hot-table"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${hot.map(r => `<tr class="${r.fresh || r.tag === '今日入池' ? 'fresh' : ''}" title="${esc(`${r.type === 'industry' ? '行业' : '概念'}板块 · ${r.tag}${r.hotDays > 1 ? ` · 近期上榜 ${r.hotDays} 次` : ''}${r.leader ? ` · 领涨 ${r.leader}` : ''}`)}"><td>${esc(r.name)} <small class="muted">${esc(r.tag)}</small></td><td class="${sign(r.pct)}">${fmtPct(r.pct)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>
+    <div class="fam-line mob-only"><p><b>强</b>${hb.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${hb.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
+  }
   return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${head}</span></h3><table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>
     <div class="fam-line mob-only"><p><b>强</b>${byP5.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${byP5.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
 }

@@ -640,7 +640,19 @@ export function parseTHSLimitThemes(raw, requestedDate, { fetchedAt = new Date()
     return { code: String(row.code ?? ''), name: String(row.name ?? ''), reasonText: row.reason_type == null ? null : String(row.reason_type),
       limitLabel: label || null, consecutive: label === '首板' ? 1 : m ? Number(m[1]) : null };
   });
-  return { ok: true, rows, total, fetchedAt };
+  const up = raw.data.limit_up_count?.today ?? {}, dn = raw.data.limit_down_count?.today ?? {};
+  const counts = { up: Number.isFinite(Number(up.num)) ? Number(up.num) : null, down: Number.isFinite(Number(dn.num)) ? Number(dn.num) : null,
+    broken: Number.isFinite(Number(up.open_num)) ? Number(up.open_num) : null, tradeStatus: raw.data.trade_status?.id ?? null };
+  return { ok: true, rows, total, counts, fetchedAt };
+}
+
+/** 东财板块排行一页（概念或行业）：代码、名称、今日涨跌幅、5 日涨跌幅（源字段 f109）、领涨股。 */
+export function parseBoardRanking(raw, type, { source = 'eastmoney:push2', fetchedAt = new Date().toISOString() } = {}) {
+  const rows = eastRows(raw).map(r => ({ code: String(r.f12 ?? ''), name: String(r.f14 ?? ''), type,
+    pct: Number.isFinite(Number(r.f3)) ? Number(r.f3) : null, p5: Number.isFinite(Number(r.f109)) ? Number(r.f109) : null,
+    leader: r.f128 && r.f128 !== '-' ? String(r.f128) : null }));
+  assert(rows.every(r => /^BK\d{4}$/.test(r.code) && r.name), '东财板块排行代码或名称无效');
+  return { ok: true, rows, total: integer(raw.data.total, '东财板块总数'), type, ...metadata(source, fetchedAt) };
 }
 
 /** 必须全量分页且每只股票有涨跌值；停牌/缺字段不能自动算成平盘。 */
@@ -1319,6 +1331,26 @@ export function createDataSource({ transport = null, calendar = OFFICIAL_CALENDA
     });
   }
 
+  /** 东财全市场板块排行（概念 508 / 行业约 500，按今日涨跌幅排序，每页 100）：每次只取一页，走东财每分钟 3 次限额。 */
+  async function getBoardRanking({ type = 'concept', page = 1, order = 'desc' } = {}) {
+    return safe(async () => {
+      assert(['concept', 'industry'].includes(type) && Number.isSafeInteger(page) && page >= 1 && page <= 10 && ['desc', 'asc'].includes(order), '板块排行参数无效');
+      return cached(`rank:${type}:${page}:${order}`, 50000, () => fallback(eastCandidates('qt/clist/get', {
+        pn: page, pz: 100, po: order === 'desc' ? 1 : 0, np: 1, fltt: 2, invt: 2, fid: 'f3', fs: `m:90 t:${type === 'industry' ? 2 : 3} f:!50`, fields: 'f12,f14,f3,f109,f128',
+      }), (raw, candidate, at) => parseBoardRanking(raw, type, { source: candidate.id, fetchedAt: at })));
+    });
+  }
+
+  /** 东财板块批量报价（热门板块池刷新今日、5 日涨跌）：一次请求最多 60 个板块。 */
+  async function getBoardQuotes(codes) {
+    return safe(async () => {
+      assert(Array.isArray(codes) && codes.length >= 1 && codes.length <= 60 && codes.every(c => /^BK\d{4}$/.test(c)), '每次 1–60 个东财板块代码');
+      return cached(`boardq:${[...codes].sort().join(',')}`, 50000, () => fallback(eastCandidates('qt/ulist.np/get', {
+        fltt: 2, invt: 2, secids: codes.map(c => `90.${c}`).join(','), fields: 'f12,f14,f3,f109,f128',
+      }), (raw, candidate, at) => parseBoardRanking(raw, 'quote', { source: candidate.id, fetchedAt: at })));
+    });
+  }
+
   /** 个股前复权日 K（腾讯 newfqkline，qfqday 含当日盘中 K），用于情绪周期高标见顶判断；每次 1–6 只。 */
   async function getStockKline(codes, count = 80) {
     return safe(async () => {
@@ -1340,16 +1372,16 @@ export function createDataSource({ transport = null, calendar = OFFICIAL_CALENDA
   async function getTHSLimitThemes(date) {
     return safe(async () => {
       const day = dateISO(date), rows = [];
-      let total = null;
+      let total = null, counts = null;
       for (let page = 1; page <= 3 && (total === null || rows.length < total); page++) {
         const r = await cached(`ths-themes:${day}:${page}`, 60000, () => fallback([{ id: 'ths:limit-up-pool', kind: 'cors-json', url: url('https://data.10jqka.com.cn/dataapi/limit_up/limit_up_pool', {
           page, limit: 200, date: day.replaceAll('-', ''), field: '199112,10,9001,330329,133971,1968584', order_field: 330329, order_type: 0, filter: 'HS,GEM2STAR' }) }],
           (raw, spec, at) => parseTHSLimitThemes(raw, day, { fetchedAt: at })));
         if (!r.ok) { if (!rows.length) return r; break; }
-        total = r.total; rows.push(...r.rows);
+        total = r.total; rows.push(...r.rows); if (page === 1) counts = r.counts;
         if (!r.rows.length) break;
       }
-      return { ok: true, date: day, rows, count: rows.length, total, partial: total !== null && rows.length < total, ...metadata('ths:limit-up-pool', fetched(), { sourceDate: day, sourceTimeTrust: 'source-pool-date' }) };
+      return { ok: true, date: day, rows, count: rows.length, total, counts, partial: total !== null && rows.length < total, ...metadata('ths:limit-up-pool', fetched(), { sourceDate: day, sourceTimeTrust: 'source-pool-date' }) };
     });
   }
 
@@ -1392,9 +1424,9 @@ export function createDataSource({ transport = null, calendar = OFFICIAL_CALENDA
   }
   function getRequestStats() { return { requests: used, maxRequests: roundMax, remaining: Math.max(0, roundMax - used), pending: pending.size, cachedEntries: cache.size }; }
   async function getSourceCooldown() { return cooldown.snapshot(); }
-  return { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, beginRefresh, getRequestStats, getSourceCooldown };
+  return { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, getBoardRanking, getBoardQuotes, beginRefresh, getRequestStats, getSourceCooldown };
 }
 
 const defaultDataSource = createDataSource();
-export const { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, beginRefresh, getRequestStats, getSourceCooldown } = defaultDataSource;
+export const { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, getBoardRanking, getBoardQuotes, beginRefresh, getRequestStats, getSourceCooldown } = defaultDataSource;
 export default defaultDataSource;
