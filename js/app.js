@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016g';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016g';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016g';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016g';
+import ds from './datasource.js?v=20261016h';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016h';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016h';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016h';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -361,12 +361,12 @@ function phaseInfo() {
 }
 
 const EVENT_TEXT = {
-  '共振爆发': lead => `共振爆发：主线族群「${lead}」。按规则：可快速提升至重仓（1–2 笔），优先领涨集团或对应 ETF${PREFERENCE_EXCLUDED.includes(lead) ? '（该族群为偏好不参与）' : ''}。`,
+  '共振爆发': lead => `共振爆发：主线板块「${FAMILY_LABEL[lead] ?? lead}」。按规则：可快速提升至重仓（1–2 笔），优先领涨集团或对应 ETF${PREFERENCE_EXCLUDED.includes(lead) ? '（该板块为偏好不参与）' : ''}。`,
   '风险降仓': () => '风险信号叠加：按规则降至半仓。',
   '破位清仓': () => '主线破位：按规则清仓观望。',
   '转入主跌': () => '指数转入主跌：按规则空仓，不抄底。',
   '主跌结束（企稳）': () => '指数站上 5 日线，主跌暂告段落：转入筑底，继续空仓等待共振。',
-  '主线切换': lead => `主线切换至「${lead}」：按规则调仓，仓位不变。`,
+  '主线切换': lead => `主线切换至「${FAMILY_LABEL[lead] ?? lead}」：按规则调仓，仓位不变。`,
 };
 
 function eventText(ev, lead) {
@@ -419,7 +419,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16g';
+const APP_VERSION = '2026.10.16h';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -469,19 +469,20 @@ function condGroups(f) {
   const syncRead = isNum(f.fT?.[lead]) && isNum(f.p1) ? `指数 ${fmtPct(f.p1)}，${lead} ${fmtPct(f.fT[lead])}` : '未知';
   const f1v = f.f1full ? true : f.f1part ? null : false;
   const holding = f.state.startsWith('大主升');
-  const riskItem = (name, short, read) => [holding ? (f.risk.includes(name) ? true : f.riskUnknown.includes(name) ? null : false) : null, name, short, holding ? read : '仅在主升状态检查'];
+  const RISK_LABEL = { '主线族巨震': '主线板块巨震', '主线族连续2日跌破5日线': '主线板块连续2日跌破5日线' };   // 引擎内部名 → 显示名
+  const riskItem = (name, short, read) => [holding ? (f.risk.includes(name) ? true : f.riskUnknown.includes(name) ? null : false) : null, RISK_LABEL[name] ?? name, short, holding ? read : '仅在主升状态检查'];
   return [
     { key: 'res', title: '共振条件', items: [
       [f.A1, '指数站上 5 日线和 10 日线，5 日线上拐', '站上均线', isNum(f.close) ? `上证 ${f.close.toFixed(2)}，MA5 ${f.m5?.toFixed(2) ?? '—'}，MA10 ${f.m10?.toFixed(2) ?? '—'}` : '未知'],
       [isNum(f.vr) ? f.volOk === true : null, f.f1full ? `量能放大（≥ ${P.VR_UP} 倍）` : f.f1part ? `量能放大（未完成二次探底，需 ≥ ${P.VR_UP_SOFT} 倍）` : '量能放大（超跌后须先出现第一波反弹）', '量能放大', volText],
       [f.volVsDecline, '量能不低于此前下跌阶段', '量超下跌段', isNum(f.a60) ? `前 60 日均量 ${fmtYi(f.a60)}` : '60 日均量不足'],
-      [f.collective, '主线族群集体走强', '主线集体走强', famRead],
+      [f.collective, '主线板块集体走强', '主线集体走强', famRead],
       [f.sync, '主线与指数同步上涨', '主线同步', syncRead],
       [f1v, '已完成二次探底', '二次探底', f.f1 ? `进度：${F1_STEPS.slice(0, f.f1).join(' → ')}` : '近期未出现超跌'],
     ] },
     { key: 'down', title: '主跌条件', items: [
       [f.D1, '指数在 5 日线下，5 日线下拐', '破5日线', isNum(f.close) && isNum(f.m5) ? `上证 ${f.close.toFixed(2)}，MA5 ${f.m5.toFixed(2)}` : '未知'],
-      [f.mainFall, '最弱族群仍在领跌', '弱族领跌', isNum(f.f5?.[f.weak]) ? `${f.weak} 近5日 ${fmtPct(f.f5[f.weak], 1)}，今日 ${fmtPct(f.fT[f.weak])}` : '未知'],
+      [f.mainFall, '最弱板块仍在领跌', '弱板领跌', isNum(f.f5?.[f.weak]) ? `${FAMILY_LABEL[f.weak] ?? f.weak} 近5日 ${fmtPct(f.f5[f.weak], 1)}，今日 ${fmtPct(f.fT[f.weak])}` : '未知'],
     ] },
     { key: 'emo', title: '情绪条件', items: [
       [f.hExpand, '连板高度拓展', '高度拓展', isNum(f.h) ? `最高 ${f.h} 板，前5日最高 ${f.hmax5 ?? '—'} 板` : '未知'],
@@ -492,8 +493,8 @@ function condGroups(f) {
     { key: 'risk', title: '风险信号', items: [
       riskItem('指数放量滞涨', '放量滞涨', isNum(f.vr) ? `量比 ${f.vr.toFixed(2)}，涨跌 ${fmtPct(f.p1)}` : '—'),
       riskItem('指数顶背离', '顶背离', isNum(f.rsi) ? `全指 RSI12 ${f.rsi.toFixed(1)}` : '—'),
-      riskItem('主线族巨震', '主线巨震', `${lead} 今日 ${fmtPct(f.fT?.[lead])}`),
-      riskItem('主线族连续2日跌破5日线', '主线破5日线', `${lead}`),
+      riskItem('主线族巨震', '主线巨震', `${FAMILY_LABEL[lead] ?? lead} 今日 ${fmtPct(f.fT?.[lead])}`),
+      riskItem('主线族连续2日跌破5日线', '主线破5日线', `${FAMILY_LABEL[lead] ?? lead}`),
       riskItem('跌停扩散', '跌停扩散', `跌停 ${f.dn ?? '—'} 家`),
     ] },
     { key: 'ref', title: '参考', items: [
@@ -554,7 +555,7 @@ function mainBoards(f) {
     if (rows) return { role: '领跌板块', note: `自 ${S.result.stateSince.slice(5)} 主跌以来 · 最多 3 个`, since: true, rows };
   }
   if (f.state === '主跌' || f.mainFall === true)
-    return { role: '领跌板块', note: '近 5 日最弱族群 · 最多 3 个', rows: boardStats(f.weak).sort((a, b) => (a.p5 ?? 99) - (b.p5 ?? 99)).slice(0, 3) };
+    return { role: '领跌板块', note: '近 5 日最弱板块 · 最多 3 个', rows: boardStats(f.weak).sort((a, b) => (a.p5 ?? 99) - (b.p5 ?? 99)).slice(0, 3) };
   return { role: '主流板块', rows: [] };
 }
 
@@ -598,7 +599,7 @@ function heroHTML(f) {
     <div class="hero-heading"><i class="state-dot" aria-hidden="true"></i>指数线（机构）<span class="eyebrow">MARKET STATE</span></div>
     <div class="hero-top"><div class="stage">${esc(meta.name)}</div><div class="position-block"><span class="position-label">指数仓位</span><span class="pos">${esc(POSITION[f.state] ?? '—')}</span></div></div>
     <p class="sub">${esc(meta.sub)}${r.stateSince ? ` · <span>自 ${esc(r.stateSince)} 起 ${days}</span>` : ''}</p>
-    <div class="act">${esc(pref ? '主线为偏好不参与的族群（外围驱动）：按规则观望' : ACTION[f.state])}</div>
+    <div class="act">${esc(pref ? '主线为偏好不参与的板块（外围驱动）：按规则观望' : ACTION[f.state])}</div>
     <div class="kpis">
       ${kpi('上证指数', isNum(f.close) ? `${f.close.toFixed(2)} <small class="${sign(f.p1)}">${fmtPct(f.p1)}</small>` : '—', '')}
       ${kpi(r.todayAppended && S.today.amtSource ? `全天量能（${S.today.amtSource.replace('全天', '')}）` : '成交额', isNum(f.amt) ? `${fmtYi(f.amt).replace(' ', '')} <small>×${isNum(f.vr) ? f.vr.toFixed(2) : '—'}</small>` : '—', '',
@@ -616,9 +617,7 @@ function boardsHTML(f) {
   const rows = mb.rows.map(b => `<div class="bd${mb.since ? ' three' : ''}"><div><span class="nm">${esc(b.name)}</span><span class="tag">${esc(FAMILY_LABEL[b.fam] ?? b.fam)}${PREFERENCE_EXCLUDED.includes(b.fam) ? ' · 偏好不参与' : ''}</span></div>
     <div class="v"><small>今日</small><span class="${sign(b.p1)}">${fmtPct(b.p1)}</span></div>${mb.since ? `<div class="v"><small>主跌以来</small><span class="${sign(b.pS)}">${fmtPct(b.pS, 1)}</span></div>` : ''}<div class="v"><small>5日</small><span class="${sign(b.p5)}">${fmtPct(b.p5, 1)}</span></div>
     ${b.etf ? `<div class="etf" title="跟踪 ${esc(b.etf.index)}；按截至 ${esc(b.etf.asOf)} 的 20 日成交额选取">ETF：${esc(b.etf.name)}（${esc(b.etf.code)}）· ${esc(b.etf.index)}</div>` : ''}</div>`).join('');
-  const st = mb.role === '领跌板块' ? leaderStop() : null;
-  const stop = st ? `<p class="stop-line desk-only ${st.ok === true ? 'ok' : ''}" title="下一轮行情的前提：主跌领跌板块先止跌（站上 5 日线且近 3 日未再创新低）。仅参考，不参与判定。"><b>${st.ok === true ? '已止跌' : st.ok === false ? '未止跌' : '止跌待定'}</b>${esc(st.read)}</p>` : '';
-  return `<section class="card board-card"><h3>${mb.role}<span class="cnt">${esc(mb.note ?? '最多 2 个')}</span></h3>${rows || '<p class="muted">无主线：未出现集体走强且与指数同步的族群</p>'}${stop}</section>`;
+  return `<section class="card board-card"><h3>${mb.role}<span class="cnt">${esc(mb.note ?? '最多 2 个')}</span></h3>${rows || '<p class="muted">无主线：未出现集体走强且与指数同步的板块</p>'}</section>`;
 }
 function extraHTML(f) {
   if ((f.state.startsWith('大主升') || S.emo?.active) && S.today.top?.ok) {
@@ -634,18 +633,26 @@ function extraHTML(f) {
   }
   const tb = Object.values(S.today.boards).filter(b => b.sourceDate === S.calendar?.date).length;
   const partial = S.result.todayAppended && tb < ALL_BOARDS.length;
-  // 板块未载入完整时，用最近一个板块数据齐全的交易日排序（补数期间昨日也可能未齐），避免只显示部分族群或空表
-  const hasF5 = row => row && Object.values(row.f5 ?? {}).filter(isNum).length >= Object.keys(FAMILIES).length - 1;
-  const src = !partial ? f : [...S.result.rows].reverse().find(hasF5) ?? f;
-  const famsF5 = Object.keys(FAMILIES).filter(k => isNum(src.f5?.[k])).sort((a, b) => src.f5[b] - src.f5[a]);
+  // 今日板块未载入完整时，用最近一个板块数据齐全的交易日（补数期间昨日也可能未齐），避免只显示部分板块或空表
+  const H = S.result.H;
+  const full = j => ALL_BOARDS.filter(c => isNum(H.boards[c]?.close[j])).length >= ALL_BOARDS.length - 2;
+  let j = H.dates.length - 1;
+  if (partial || !full(j)) { while (j > 0 && !full(j)) j--; }
+  const famOf = Object.fromEntries(Object.entries(FAMILIES).flatMap(([fam, cs]) => cs.map(c => [c, fam])));
+  const rows = [...new Set(ALL_BOARDS)].filter(c => H.boards[c]).map(c => {
+    const x = H.boards[c].close;
+    return { code: c, name: S.seed.boards[c]?.name ?? c, fam: famOf[c],
+      p1: isNum(x[j]) && isNum(x[j - 1]) ? (x[j] / x[j - 1] - 1) * 100 : null,
+      p5: isNum(x[j]) && isNum(x[j - 5]) ? (x[j] / x[j - 5] - 1) * 100 : null };
+  });
   // 排序：点表头切换（今日 / 近5日，大→小 / 小→大），选择记在本机
-  const fs = load('famSort', { k: 'f5', d: -1 });
-  const val = k => src[fs.k]?.[k];
-  const fams = [...famsF5].sort((a, b) => (isNum(val(a)) ? 0 : 1) - (isNum(val(b)) ? 0 : 1) || fs.d * ((val(a) ?? 0) - (val(b) ?? 0)));
-  const th = (key, label) => `<th><button type="button" class="sort${fs.k === key ? '' : ' off'}" data-sort="${key}" title="点击按${label}排序：${fs.k === key && fs.d === -1 ? '改为从小到大' : '从大到小'}">${label}<span class="ar">${fs.k === key ? (fs.d === -1 ? '↓' : '↑') : '↕'}</span></button></th>`;
-  f = { ...f, f5: src.f5, fT: src.fT };
-  return `<section class="card fill desk-only mob-extra"><h3>族群强弱<span class="cnt">${partial ? `截至 ${esc(src.date?.slice(5) ?? '—')} · 今日板块 ${tb}/${ALL_BOARDS.length}` : `按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}`}</span></h3><table class="mini"><thead><tr><th>族群</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${fams.map((k, idx) => `<tr class="${idx >= 3 && idx < fams.length - 3 ? 'mid' : ''}"><td>${esc(FAMILY_LABEL[k] ?? k)}${PREFERENCE_EXCLUDED.includes(k) ? ' <small class="muted">偏好不参与</small>' : ''}</td><td class="${sign(f.fT[k])}">${fmtPct(f.fT[k])}</td><td class="${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</td></tr>`).join('')}</tbody></table>
-    <div class="fam-line mob-only"><p><b>强</b>${famsF5.slice(0, 2).map(k => `${esc(k)} <span class="num ${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</span>`).join('　')}</p><p><b>弱</b>${famsF5.slice(-2).reverse().map(k => `${esc(k)} <span class="num ${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</span>`).join('　')}</p></div></section>`;
+  const fs = load('famSort', { k: 'f5', d: -1 }), key = fs.k === 'fT' ? 'p1' : 'p5';
+  rows.sort((a, b) => (isNum(a[key]) ? 0 : 1) - (isNum(b[key]) ? 0 : 1) || fs.d * ((a[key] ?? 0) - (b[key] ?? 0)));
+  const byP5 = [...rows].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
+  const th = (k, label) => `<th><button type="button" class="sort${fs.k === k ? '' : ' off'}" data-sort="${k}" title="点击按${label}排序：${fs.k === k && fs.d === -1 ? '改为从小到大' : '从大到小'}">${label}<span class="ar">${fs.k === k ? (fs.d === -1 ? '↓' : '↑') : '↕'}</span></button></th>`;
+  const head = j < H.dates.length - 1 || partial ? `截至 ${esc(H.dates[j].slice(5))} · 今日板块 ${tb}/${ALL_BOARDS.length}` : `${rows.length} 个板块 · 按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}`;
+  return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${head}</span></h3><table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>
+    <div class="fam-line mob-only"><p><b>强</b>${byP5.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${byP5.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
 }
 const segName = st => (st === '大主升-减仓' ? '大主升·减仓' : st);
 function segTag(g) {
@@ -692,8 +699,11 @@ function logHTML() {
     return `<li class="${g.phase === '退潮' ? 'down' : g.phase === '情绪试探' ? 'flat' : 'up'}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
   };
   const cur = idxSegs[0], ep = S.emo?.phase;
-  const now = `机构线 <b>${esc(segName(cur?.state ?? '—'))}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>`;
-  return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span><span class="cnt now-h">${now}</span></h3><div class="log-top"><ul class="log ${log.length ? 'hot' : 'idle'}">
+  const st = leaderStop();
+  const stopTag = st ? `<span class="stop-tag ${st.ok === true ? 'ok' : ''}" title="下一轮行情的前提：主跌领跌板块先止跌（站上 5 日线且近 3 日未再创新低）。仅参考，不参与判定。">${st.ok === true ? '已止跌' : st.ok === false ? '未止跌' : '止跌待定'}</span>` : '';
+  const now = `机构线 <b>${esc(segName(cur?.state ?? '—'))}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>${st ? ` · ${stopTag}<span class="stop-read">${esc(st.read)}</span>` : ''}`;
+  const nowShort = now.replace(/<span class="stop-read">[\s\S]*?<\/span>/, '');
+  return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span><span class="cnt now-h">${nowShort}</span></h3><div class="log-top"><ul class="log ${log.length ? 'hot' : 'idle'}">
     ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span></div>
     <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul></div>
     <div class="tlcol"><h4>情绪线</h4><ul class="log tl">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul></div></div></section>`;
