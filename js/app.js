@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016j';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016j';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016j';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016j';
+import ds from './datasource.js?v=20261016k';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016k';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016k';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016k';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -125,10 +125,12 @@ const ALL_BOARDS = Object.values(FAMILIES).flat();
  * 只有科技类（大科技、商业航天）多轮发酵、按分支列出；其余一律归纳为大类。今日/近 5 日 = 成员板块等权。
  */
 const SECTORS = [
-  { name: '大科技', branch: true, boards: ['881121', '886042', '886033', '881129', '885959', '881270', '881124', '885800', '886112', '886050', '885736'] },
+  { name: '大科技', branch: true, boards: ['881121', '886042', '886033', '881129', '885959', '881270', '881124', '885800', '886112', '886050'] },
   { name: '商业航天', branch: true, boards: ['886078', '885574'] },
   { name: '军工', boards: ['885700', '881166', '881276'] },
-  { name: 'AI应用', boards: ['881272', '886108', '881275'] },
+  { name: 'AI应用', boards: ['881272', '886108', '881275', '881164'] },   // 含传媒
+  { name: '低空经济', boards: ['886067'] },
+  { name: '智能驾驶·汽车', boards: ['885736', '881125', '881126'] },
   { name: '机器人', boards: ['885517'] },
   { name: '医药', boards: ['881140', '881141', '881175', '886015'] },
   { name: '新能源', boards: ['881281', '885710', '881279', '881280'] },
@@ -138,14 +140,15 @@ const SECTORS = [
   { name: '金融', boards: ['881155', '881157', '881156'] },
   { name: '消费零售', boards: ['881158'] },
   { name: '农业', boards: ['881101', '881103'] },
-  { name: '传媒出版', boards: ['881164'] },
 ];
 // 东财热门板块 → 大类（关键词，先到先得）
 const SECTOR_KEYS = [
   ['商业航天', ['航天', '卫星', '空间站', '火箭', '北斗']],
-  ['军工', ['军工', '兵装', '航空装备', '航海装备', '国防', '军民融合', '航母', '大飞机', '无人机', '民爆', '船舶', '通用航空', '低空', '飞行汽车', '军用']],
-  ['大科技', ['半导体', '芯片', '存储', 'CPO', '光模块', 'PCB', '元件', 'MLCC', '消费电子', '算力', '通信', '电子', '服务器', '液冷', '驾驶', '汽车', '光刻', '先进封装']],
-  ['AI应用', ['AI', '软件', '游戏', '数据要素', '多模态', '智能体', '营销', '短剧']],
+  ['低空经济', ['低空', '飞行汽车', 'eVTOL', '无人机', '通用航空']],
+  ['军工', ['军工', '兵装', '航空装备', '航海装备', '国防', '军民融合', '航母', '大飞机', '民爆', '船舶', '军用']],
+  ['智能驾驶·汽车', ['驾驶', '汽车', '车联网', '压铸', '热管理', '整车', '零部件', '车路']],
+  ['大科技', ['半导体', '芯片', '存储', 'CPO', '光模块', 'PCB', '元件', 'MLCC', '消费电子', '算力', '通信', '电子', '服务器', '液冷', '光刻', '先进封装']],
+  ['AI应用', ['AI', '软件', '游戏', '数据要素', '多模态', '智能体', '营销', '短剧', '传媒', '出版', '影视', '文化', '图书']],
   ['机器人', ['机器人', '减速器', '具身']],
   ['医药', ['药', '医', 'CRO', '生物', '疫苗']],
   ['新能源', ['电池', '锂', '光伏', '风电', '储能', '固态', '氢', '燃料电池']],
@@ -155,7 +158,6 @@ const SECTOR_KEYS = [
   ['金融', ['银行', '证券', '保险', '券商', '金融']],
   ['消费零售', ['零售', '商超', '百货', '电商', '免税', '食品', '白酒', '饮料', '家电', '鸡肉', '乳业']],
   ['农业', ['农业', '种业', '粮食', '养殖', '种植', '猪', '渔', '化肥']],
-  ['传媒出版', ['传媒', '出版', '影视', '文化', '图书']],
 ];
 const sectorOfName = name => SECTOR_KEYS.find(([, ks]) => ks.some(k => name.includes(k)))?.[0] ?? null;
 const EXTRA_BOARDS = [...new Set(SECTORS.flatMap(x => x.boards))].filter(c => !ALL_BOARDS.includes(c));
@@ -508,7 +510,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16j';
+const APP_VERSION = '2026.10.16k';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
