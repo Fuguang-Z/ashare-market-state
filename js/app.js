@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016f';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016f';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016f';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016f';
+import ds from './datasource.js?v=20261016g';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016g';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016g';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016g';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 8;
@@ -419,7 +419,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16f';
+const APP_VERSION = '2026.10.16g';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -637,10 +637,15 @@ function extraHTML(f) {
   // 板块未载入完整时，用最近一个板块数据齐全的交易日排序（补数期间昨日也可能未齐），避免只显示部分族群或空表
   const hasF5 = row => row && Object.values(row.f5 ?? {}).filter(isNum).length >= Object.keys(FAMILIES).length - 1;
   const src = !partial ? f : [...S.result.rows].reverse().find(hasF5) ?? f;
-  const fams = Object.keys(FAMILIES).filter(k => isNum(src.f5?.[k])).sort((a, b) => src.f5[b] - src.f5[a]);
+  const famsF5 = Object.keys(FAMILIES).filter(k => isNum(src.f5?.[k])).sort((a, b) => src.f5[b] - src.f5[a]);
+  // 排序：点表头切换（今日 / 近5日，大→小 / 小→大），选择记在本机
+  const fs = load('famSort', { k: 'f5', d: -1 });
+  const val = k => src[fs.k]?.[k];
+  const fams = [...famsF5].sort((a, b) => (isNum(val(a)) ? 0 : 1) - (isNum(val(b)) ? 0 : 1) || fs.d * ((val(a) ?? 0) - (val(b) ?? 0)));
+  const th = (key, label) => `<th><button type="button" class="sort${fs.k === key ? '' : ' off'}" data-sort="${key}" title="点击按${label}排序：${fs.k === key && fs.d === -1 ? '改为从小到大' : '从大到小'}">${label}<span class="ar">${fs.k === key ? (fs.d === -1 ? '↓' : '↑') : '↕'}</span></button></th>`;
   f = { ...f, f5: src.f5, fT: src.fT };
-  return `<section class="card fill desk-only mob-extra"><h3>族群强弱<span class="cnt">${partial ? `截至 ${esc(src.date?.slice(5) ?? '—')} · 今日板块 ${tb}/${ALL_BOARDS.length}` : '近 5 日排序'}</span></h3><table class="mini"><thead><tr><th>族群</th><th>今日</th><th>近5日</th></tr></thead><tbody>${fams.map((k, idx) => `<tr class="${idx >= 3 && idx < fams.length - 3 ? 'mid' : ''}"><td>${esc(FAMILY_LABEL[k] ?? k)}${PREFERENCE_EXCLUDED.includes(k) ? ' <small class="muted">偏好不参与</small>' : ''}</td><td class="${sign(f.fT[k])}">${fmtPct(f.fT[k])}</td><td class="${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</td></tr>`).join('')}</tbody></table>
-    <div class="fam-line mob-only"><p><b>强</b>${fams.slice(0, 2).map(k => `${esc(k)} <span class="num ${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</span>`).join('　')}</p><p><b>弱</b>${fams.slice(-2).reverse().map(k => `${esc(k)} <span class="num ${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</span>`).join('　')}</p></div></section>`;
+  return `<section class="card fill desk-only mob-extra"><h3>族群强弱<span class="cnt">${partial ? `截至 ${esc(src.date?.slice(5) ?? '—')} · 今日板块 ${tb}/${ALL_BOARDS.length}` : `按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}`}</span></h3><table class="mini"><thead><tr><th>族群</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${fams.map((k, idx) => `<tr class="${idx >= 3 && idx < fams.length - 3 ? 'mid' : ''}"><td>${esc(FAMILY_LABEL[k] ?? k)}${PREFERENCE_EXCLUDED.includes(k) ? ' <small class="muted">偏好不参与</small>' : ''}</td><td class="${sign(f.fT[k])}">${fmtPct(f.fT[k])}</td><td class="${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</td></tr>`).join('')}</tbody></table>
+    <div class="fam-line mob-only"><p><b>强</b>${famsF5.slice(0, 2).map(k => `${esc(k)} <span class="num ${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</span>`).join('　')}</p><p><b>弱</b>${famsF5.slice(-2).reverse().map(k => `${esc(k)} <span class="num ${sign(f.f5[k])}">${fmtPct(f.f5[k], 1)}</span>`).join('　')}</p></div></section>`;
 }
 const segName = st => (st === '大主升-减仓' ? '大主升·减仓' : st);
 function segTag(g) {
@@ -741,6 +746,12 @@ function render() {
   $('#alert-btn').setAttribute('aria-pressed', String(alertsOn));
 }
 document.addEventListener('click', e => {
+  const sb = e.target.closest('[data-sort]');
+  if (sb) {
+    const cur = load('famSort', { k: 'f5', d: -1 }), k = sb.dataset.sort;
+    save('famSort', { k, d: cur.k === k ? -cur.d : -1 });
+    render(); return;
+  }
   const li = e.target.closest('.mgroup .ci'); if (!li) return;
   showToast(li.dataset.label, li.dataset.read);
 });
