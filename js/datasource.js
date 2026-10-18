@@ -22,6 +22,17 @@ export const ETFS = Object.freeze([
   { symbol: 'sh588000', name: '科创50ETF', secid: '1.588000' },
   { symbol: 'sz159915', name: '创业板ETF', secid: '0.159915' },
 ]);
+/**
+ * 外围科技指数（只作展示，不参与判定）。日 K：东财 push2his 为主（每个指数一次请求，调用方按日缓存）；
+ * 纳指走腾讯；费城半导体在东财不可用时改用跟踪它的 SOXQ ETF（页面注明）。日韩盘中涨跌走腾讯报价。
+ * settle：北京时间该时刻之后，当日日 K 视为收定。
+ */
+export const OVERSEAS = Object.freeze([
+  { key: 'SOX', name: '费城半导体', region: '美', secid: '251.SOX', proxy: 'usSOXQ.OQ', settle: '06:00' },
+  { key: 'IXIC', name: '纳斯达克', region: '美', tencent: 'usIXIC', settle: '06:00' },
+  { key: 'N225', name: '日经225', region: '日', secid: '100.N225', quote: 'gzN225', settle: '14:35' },
+  { key: 'KS11', name: '韩国KOSPI', region: '韩', secid: '100.KS11', quote: 'gzKS11', settle: '14:35' },
+]);
 const ALL_SYMBOLS = [...INDEXES, ...ETFS];
 const QUOTE_FIELDS = 'f2,f3,f6,f12,f13,f14,f17,f18,f124';
 const BOARD_FIELDS = 'f2,f3,f6,f12,f14,f20,f104,f105,f128,f140,f124';
@@ -359,7 +370,7 @@ export function fixedCallbackScript(requestURL, { callbackName, charset = 'utf-8
 /** 腾讯 qt 返回 v_sh... 赋值脚本，不冒充 cb= JSONP；GBK 由浏览器脚本解码。 */
 export function tencentQuoteScript(symbols) {
   assertJSONPEnvironment();
-  assert(Array.isArray(symbols) && symbols.length > 0 && symbols.length <= 200 && symbols.every(s => /^(sh|sz)\d{6}$/.test(s)), '腾讯报价代码列表无效');
+  assert(Array.isArray(symbols) && symbols.length > 0 && symbols.length <= 200 && symbols.every(s => /^(sh|sz)\d{6}$|^gz[A-Z0-9]{2,8}$/.test(s)), '腾讯报价代码列表无效');
   const run = () => new Promise((resolve, reject) => {
     const old = new Map(symbols.map(symbol => [`v_${symbol}`, { present: Object.hasOwn(window, `v_${symbol}`), value: window[`v_${symbol}`] }]));
     const script = document.createElement('script');
@@ -454,6 +465,34 @@ export function parseEastmoneyDaily(raw, symbol, { source = 'eastmoney:push2his'
     };
   });
   return { symbol, rows, adjustment: 'none', ...metadata(source, fetchedAt, { sourceDate: rows.at(-1).date, sourceTimeTrust: 'source-daily-date' }) };
+}
+
+/** 外围指数日 K：行为 [日期, 开, 高, 低, 收]；只校验日期递增与 OHLC 关系（无成交额口径）。 */
+export function parseOverseasDaily(rows, key, { source, fetchedAt = new Date().toISOString() } = {}) {
+  assert(Array.isArray(rows) && rows.length >= 5 && rows.length <= 400, `${key} 日 K 数量无效`);
+  let previous = '';
+  const out = rows.map(([d, o, h, l, c]) => {
+    const date = dateISO(d);
+    assert(date > previous && date <= chinaClock(new Date(fetchedAt)).date, `${key} 日 K 日期重复、乱序或位于未来`);
+    previous = date;
+    const open = numeric(o, 'open'), high = numeric(h, 'high'), low = numeric(l, 'low'), close = numeric(c, 'close');
+    assert(low > 0 && low <= Math.min(open, close) && high >= Math.max(open, close), `${key} 日 K OHLC 无效`);
+    return { date, open, high, low, close };
+  });
+  return { key, rows: out, ...metadata(source, fetchedAt, { sourceDate: out.at(-1).date, sourceTimeTrust: 'source-daily-date' }) };
+}
+
+/** 腾讯全球指数简版报价（gz 前缀）：0=代码 1=名称 2=时间 3=现价 4=涨跌 5=涨跌幅；无开高低。 */
+export function parseOverseasQuotes(raw, symbols, { source = 'tencent:qt', fetchedAt = new Date().toISOString() } = {}) {
+  assert(raw && typeof raw === 'object', '腾讯响应不是报价映射');
+  return symbols.map(symbol => {
+    const fields = String(raw[symbol] ?? '').split('~');
+    assert(fields.length >= 6 && fields[0] === symbol.slice(2), `腾讯 ${symbol} 标识或字段数量不符`);
+    const price = numeric(fields[3], 'price', { nonnegative: true }), change = numeric(fields[4], 'change');
+    assert(price > 0, '行情价格为零或缺失');
+    const sourceDate = dateISO(String(fields[2]).slice(0, 10));
+    return { symbol, price, previousClose: price - change, pct: numeric(fields[5], 'pct'), sourceDate, sourceTime: String(fields[2]), source, fetchedAt };
+  });
 }
 
 /** 腾讯 newfqkline 的 index 8 是万元；旧六列 fqkline 不具备成交额，禁止补算。 */
@@ -1422,11 +1461,41 @@ export function createDataSource({ transport = null, calendar = OFFICIAL_CALENDA
     roundMax = limit;
     return getRequestStats();
   }
+  /** 外围科技指数日 K：一个指数一次请求（东财优先，失败或冷却时按配置改用腾讯）；已完成日由调用方按日缓存。 */
+  async function getOverseasDaily(key, count = 30) {
+    return safe(() => {
+      const item = OVERSEAS.find(row => row.key === key);
+      assert(item, '未知外围指数');
+      assert(Number.isSafeInteger(count) && count >= 5 && count <= 120, '外围日 K 根数须为5–120');
+      const tencent = (sym, id) => ({ id, kind: 'cors-json', sym, url: url('https://proxy.finance.qq.com/ifzqgtimg/appstock/app/newfqkline/get', { param: `${sym},day,,,${count},qfq` }) });
+      const candidates = [];
+      if (item.secid) candidates.push(...eastCandidates('qt/stock/kline/get', { secid: item.secid, klt: 101, fqt: 0, beg: 0, end: 20500101, lmt: count, fields1: 'f1,f2,f3', fields2: 'f51,f52,f53,f54,f55' }, true));
+      if (item.tencent) candidates.push(tencent(item.tencent, 'tencent:newfqkline'));
+      if (item.proxy) candidates.push(tencent(item.proxy, 'tencent:newfqkline-etf'));
+      return cached(`overseas:${key}:${count}`, 600000, () => fallback(candidates, (raw, candidate, at) => {
+        if (candidate.id.startsWith('eastmoney')) {
+          assert(raw && Number(raw.rc ?? 0) === 0 && Array.isArray(raw.data?.klines), `${key} 东财日 K 结构或业务状态无效`);
+          const rows = raw.data.klines.map(line => { const f = String(line).split(','); return [f[0], f[1], f[3], f[4], f[2]]; });
+          return { ...parseOverseasDaily(rows, key, { source: candidate.id, fetchedAt: at }), viaEtf: null };
+        }
+        const d = raw?.data?.[candidate.sym], rows = d?.day ?? d?.qfqday;
+        assert(Number(raw?.code) === 0 && Array.isArray(rows), `${key} 腾讯日 K 结构无效`);
+        return { ...parseOverseasDaily(rows.map(f => [f[0], f[1], f[3], f[4], f[2]]), key, { source: candidate.id, fetchedAt: at }),
+          viaEtf: candidate.id.endsWith('-etf') ? candidate.sym.replace(/^us|\.\w+$/g, '') : null };
+      }));
+    });
+  }
+  /** 日韩指数盘中涨跌（腾讯一次批量，不占东财额度）。 */
+  async function getOverseasQuotes() {
+    const symbols = OVERSEAS.filter(row => row.quote).map(row => row.quote);
+    return safe(() => cached('overseasQuotes', 60000, () => fallback([{ id: 'tencent:qt', kind: 'tencent-script', url: `https://qt.gtimg.cn/q=${symbols.join(',')}`, symbols }],
+      (raw, candidate, at) => ({ rows: parseOverseasQuotes(raw, symbols, { source: candidate.id, fetchedAt: at }) }))));
+  }
   function getRequestStats() { return { requests: used, maxRequests: roundMax, remaining: Math.max(0, roundMax - used), pending: pending.size, cachedEntries: cache.size }; }
   async function getSourceCooldown() { return cooldown.snapshot(); }
-  return { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, getBoardRanking, getBoardQuotes, beginRefresh, getRequestStats, getSourceCooldown };
+  return { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, getBoardRanking, getBoardQuotes, getOverseasDaily, getOverseasQuotes, beginRefresh, getRequestStats, getSourceCooldown };
 }
 
 const defaultDataSource = createDataSource();
-export const { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, getBoardRanking, getBoardQuotes, beginRefresh, getRequestStats, getSourceCooldown } = defaultDataSource;
+export const { getIndexQuotes, getIndexDaily, getMarketTurnover, getMarketBreadth, getBoards, getBoardDaily, getLimitPools, getLimitStockSectors, getEtfData, getTradingCalendar, getTopTurnover, getYesterdayTopTurnover, getBoardTurnoverShare, getProjectedTurnover, getBoardRecentDaily, getBoardMembers, getWideRangeCandidates, getTHSBoardToday, getTHSLimitThemes, getStockKline, getBoardRanking, getBoardQuotes, getOverseasDaily, getOverseasQuotes, beginRefresh, getRequestStats, getSourceCooldown } = defaultDataSource;
 export default defaultDataSource;

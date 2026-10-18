@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds from './datasource.js?v=20261016t';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261016t';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261016t';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261016t';
+import ds, { OVERSEAS } from './datasource.js?v=20261018a';
+import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261018a';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261018a';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261018a';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
@@ -24,6 +24,8 @@ const S = {
   calendar: null, tick: 0, busy: false, boardCursor: 0, result: null, lastError: null, lastTickAt: null,
   extra: null,               // 种子之后的已完成日补数：{ boards:{code:{date:close}}, limits:{date:{...}} }，缓存在浏览器
   backfill: { missing: [], boardsDone: 0, limitsDone: 0, complete: true },
+  boardK: null, boardKFail: {},          // 板块卡迷你 K 线：{ date, rows:{code:[[日期,开,高,低,收]]} }（已完成日，按日缓存在浏览器）
+  overseas: null, overseasFail: {}, overseasQ: null,   // 外围科技：日 K 按日缓存；日韩盘中现价
 };
 
 function load(key, fallback) { try { return JSON.parse(localStorage.getItem(`${STORE}.${key}`)) ?? fallback; } catch { return fallback; } }
@@ -267,6 +269,44 @@ async function klineRound() {
   for (const f of r.failed ?? []) S.kQueue.delete(f.code);
 }
 
+/* ---------------- 迷你 K 线（板块卡、外围科技） ---------------- */
+const CHART_BARS = 20;          // 显示根数
+const CHART_FETCH = 25;         // 多取 5 根用于 5 日线
+const RETRY_MS = 10 * 60000;    // 失败后 10 分钟内不重试
+/** 板块卡里的板块：近期已完成日 K 每天每个板块取一次（同花顺，不占东财额度），存浏览器；今日一根用实时轮询的当日 K。 */
+async function boardKRound() {
+  const f = S.result?.final; if (!f) return;
+  const date = S.calendar.date;
+  if (S.boardK?.date !== date) S.boardK = { date, rows: {} };
+  const need = mainBoards(f).rows.map(b => b.code).filter(c => !S.boardK.rows[c] && Date.now() - (S.boardKFail[c] ?? 0) > RETRY_MS);
+  if (!need.length) return;
+  const r = await ds.getBoardRecentDaily(need.map(c => `ths:${c}`), CHART_FETCH);
+  for (const g of r.groups ?? []) {
+    const code = String(g.requestedBoard).replace('ths:', '');
+    if (g.ok) S.boardK.rows[code] = g.rows.filter(x => x.date < date).map(x => [x.date, x.open, x.high, x.low, x.close]);
+    else S.boardKFail[code] = Date.now();
+  }
+  if (!r.groups) for (const c of need) S.boardKFail[c] = Date.now();
+  save('boardK', S.boardK);
+}
+/** 外围科技：日 K 每天每个指数取一次，过了收定时刻再取一次；每轮最多 2 个请求，其中东财最多 1 个。日韩盘中每轮取一次现价（腾讯）。 */
+async function overseasRound() {
+  const date = S.calendar.date, hm = S.calendar.time.slice(0, 5);
+  if (S.overseas?.date !== date) S.overseas = { date, items: {} };
+  const stale = o => { const it = S.overseas.items[o.key]; return !it || (it.at < o.settle && hm >= o.settle) || (it.viaEtf && Date.now() - it.t > 3 * RETRY_MS); };
+  let n = 0, east = 0;
+  for (const o of OVERSEAS) {
+    if (n >= 2 || !stale(o) || Date.now() - (S.overseasFail[o.key] ?? 0) < RETRY_MS || (o.secid && east >= 1)) continue;
+    n++; if (o.secid) east++;
+    const r = await ds.getOverseasDaily(o.key, CHART_FETCH);
+    if (r.ok) S.overseas.items[o.key] = { at: hm, t: Date.now(), rows: r.rows.map(x => [x.date, x.open, x.high, x.low, x.close]), viaEtf: r.viaEtf ?? null };
+    else S.overseasFail[o.key] = Date.now();
+  }
+  if (n) save('overseasK', S.overseas);
+  const dow = new Date(`${date}T12:00:00+08:00`).getUTCDay();
+  if (!S.overseasQ || (dow >= 1 && dow <= 5 && hm >= '08:00' && hm <= '14:40')) { const q = await ds.getOverseasQuotes(); if (q.ok) S.overseasQ = q; }
+}
+
 /** 种子过期时补齐「种子之后、今天之前」的板块收盘与涨跌停统计。每轮限量，进度存浏览器，刷新页面不重复取。 */
 function missingDates() {
   const rows = S.indexDaily?.sh000001 ?? [];
@@ -328,6 +368,8 @@ async function warmup() {
   if (!S.seedPools) { S.seedPools = decodePools(S.seed.limitPools); S.seedK = decodeKline(S.seed.cycleKline, S.seed.dates); }
   if (!S.extra) S.extra = load('extra', { boards: {}, limits: {} });
   if (!S.extra.pools) S.extra.pools = {};
+  if (!S.boardK) S.boardK = load('boardK', null);
+  if (!S.overseas) S.overseas = load('overseasK', null);
   updateBackfill();
 }
 
@@ -368,6 +410,7 @@ async function tick() {
     // 收盘后打开页面：主动取回今日板块收盘（盘中轮询已停），否则板块强弱只能退回上一交易日
     if (!needWarm && S.calendar.isTradingDay && !S.calendar.refreshRecommended && S.calendar.time >= '15:00') await boardCatchup();
     if (!needWarm && S.kQueue.size) await klineRound();
+    if (!needWarm) { await boardKRound(); await overseasRound(); }
     S.lastError = null;
   } catch (e) { S.lastError = String(e.message ?? e); }
   finally {
@@ -522,7 +565,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.16t';
+const APP_VERSION = '2026.10.18a';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -620,7 +663,8 @@ function countHTML(items) {
 }
 function groupCard(g, extra = '') {
   const no = { res: '01', down: '02', emo: '03', risk: '04', ref: '05' }[g.key];
-  return `<section class="card condition-card desk-only ${extra}" data-group="${g.key}"><h3><span class="section-no" aria-hidden="true">${no}</span>${esc(g.title)}${countHTML(g.items)}</h3><ul class="cl">${g.items.map(item => itemHTML(item)).join('')}</ul></section>`;
+  const idle = g.items.length > 1 && g.items.every(x => x[3] === g.items[0][3]) && g.items[0][3] === '仅在主升状态检查';
+  return `<section class="card condition-card desk-only ${extra}${idle ? ' idle' : ''}" data-group="${g.key}"><h3><span class="section-no" aria-hidden="true">${no}</span>${esc(g.title)}${idle ? '<small class="idle-note">仅在主升状态检查</small>' : ''}${countHTML(g.items)}</h3><ul class="cl">${g.items.map(item => itemHTML(item)).join('')}</ul></section>`;
 }
 function mobileConds(groups) {
   return `<section class="card conds mob-only" aria-label="全部判定条件，点按查看读数">${groups.map(g => `<div class="mgroup" data-group="${g.key}"><span class="gt">${esc(g.title.replace('条件', '').replace('信号', ''))}${countHTML(g.items)}</span>${g.items.map(item => itemHTML(item, true)).join('')}</div>`).join('')}</section>`;
@@ -715,12 +759,70 @@ function heroHTML(f) {
       : lastAlert ? `<div class="tent">最近提醒 ${esc(new Date(lastAlert.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}：${esc(lastAlert.event)}</div>` : ''}
   </section>`;
 }
+/** 迷你 K 线（SVG）：红涨绿跌，细线为 5 日均线；盘中未收定的一根画成虚线空心。bars 含前置的 5 日线计算根。 */
+function sparkK(all, w = 76, h = 22) {
+  if (!all?.length) return `<span class="kspark empty" style="width:${w}px" title="K 线暂缺">—</span>`;
+  const bars = all.slice(-CHART_BARS), off = all.length - bars.length;
+  const ma = bars.map((_, i) => { const k = off + i; return k >= 4 ? all.slice(k - 4, k + 1).reduce((a, b) => a + b.c, 0) / 5 : null; });
+  const hi = Math.max(...bars.map(b => b.h), ...ma.filter(isNum)), lo = Math.min(...bars.map(b => b.l), ...ma.filter(isNum)), span = hi - lo || 1;
+  const step = w / CHART_BARS, bw = Math.max(1.4, step * 0.6), x0 = (CHART_BARS - bars.length) * step;
+  const y = v => (((hi - v) / span) * (h - 2) + 1).toFixed(1), xc = i => (x0 + i * step + step / 2).toFixed(1);
+  const candles = bars.map((b, i) => {
+    const top = Math.max(b.o, b.c), bh = Math.max(0.8, Math.abs(y(b.o) - y(b.c)));
+    return `<g class="${b.c >= b.o ? 'ku' : 'kd'}${b.live ? ' live' : ''}"><line x1="${xc(i)}" x2="${xc(i)}" y1="${y(b.h)}" y2="${y(b.l)}"/><rect x="${(x0 + i * step + (step - bw) / 2).toFixed(1)}" y="${y(top)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}"/></g>`;
+  }).join('');
+  const pts = ma.map((v, i) => (isNum(v) ? `${xc(i)},${y(v)}` : null)).filter(Boolean).join(' ');
+  const last = bars.at(-1);
+  const tip = `近 ${bars.length} 个交易日 K 线（${bars[0].date.slice(5)} 至 ${last.date.slice(5)}），细线为 5 日均线${last.live ? (last.approx ? '；最后一根为盘中，只示意昨收到现价' : '；最后一根为盘中') : ''}`;
+  return `<svg class="kspark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(tip)}"><title>${esc(tip)}</title>${candles}${pts ? `<polyline class="ma" points="${pts}"/>` : ''}</svg>`;
+}
+/** 板块近期日 K：已完成日（按日缓存）+ 今日（实时轮询到的当日 K 有开高低才画） */
+function boardBars(code) {
+  const base = S.boardK?.rows?.[code]; if (!base?.length) return null;
+  const bars = base.map(([date, o, h, l, c]) => ({ date, o, h, l, c }));
+  const t = S.today.boards[code];
+  if (t?.sourceDate === S.calendar?.date && t.sourceDate > bars.at(-1).date && [t.open, t.high, t.low, t.close].every(isNum))
+    bars.push({ date: t.sourceDate, o: t.open, h: t.high, l: t.low, c: t.close, live: !!S.calendar?.refreshRecommended });
+  return bars;
+}
+/** 外围指数日 K + 日韩盘中现价：同一天则更新最后一根，否则追加一根示意（腾讯简版报价没有开高低） */
+function overseasBars(o) {
+  const it = S.overseas?.items?.[o.key]; if (!it?.rows?.length) return null;
+  const bars = it.rows.map(([date, op, h, l, c]) => ({ date, o: op, h, l, c }));
+  const q = o.quote && S.overseasQ?.rows?.find(r => r.symbol === o.quote), last = bars.at(-1);
+  if (q && q.sourceDate === last.date) Object.assign(last, { c: q.price, h: Math.max(last.h, q.price), l: Math.min(last.l, q.price), live: true });
+  else if (q && q.sourceDate > last.date) bars.push({ date: q.sourceDate, o: q.previousClose, h: Math.max(q.previousClose, q.price), l: Math.min(q.previousClose, q.price), c: q.price, live: true, approx: true });
+  return bars;
+}
+const barPct = b => (b?.length >= 2 ? (b.at(-1).c / b.at(-2).c - 1) * 100 : null);
+/** 外围科技：美日韩科技权重指数，只列客观涨跌与近期 K 线 */
+function overseasData() {
+  return OVERSEAS.map(o => {
+    const bars = overseasBars(o), it = S.overseas?.items?.[o.key], q = o.quote && S.overseasQ?.rows?.find(r => r.symbol === o.quote);
+    // 日 K 暂缺（如东财冷却）时，涨跌幅退回腾讯报价
+    const last = bars?.at(-1) ?? (q ? { date: q.sourceDate } : null), pct = bars ? barPct(bars) : q?.pct ?? null;
+    const when = last ? (last.live ? `${last.date.slice(5)} 盘中` : `${last.date.slice(5)}${bars ? ' 收盘' : ''}`) : '暂无数据';
+    const via = it?.viaEtf ? `（以 ${it.viaEtf} ETF 代替）` : '';
+    return { o, bars, last, pct, via, title: `${o.region} · ${o.name}${via}：${when} ${fmtPct(pct)}` };
+  });
+}
+function overseasHTML() {
+  const rows = overseasData();
+  const cells = rows.map(r => `<div class="os" title="${esc(r.title)}"><span class="nm">${esc(r.o.name)}${r.via ? '<sup>*</sup>' : ''}</span><span class="pc ${sign(r.pct)}">${fmtPct(r.pct)}</span>${sparkK(r.bars, 56, 20)}</div>`).join('');
+  const dateOf = region => { const l = rows.filter(r => region.includes(r.o.region)).map(r => r.last).find(Boolean); return l ? `${l.date.slice(5)}${l.live ? ' 盘中' : ''}` : '—'; };
+  return `<section class="card os-card desk-only" title="美日韩科技权重指数，迷你 K 线为近 ${CHART_BARS} 个交易日"><h3>外围科技<span class="cnt">美 ${dateOf('美')}<br>日韩 ${dateOf('日韩')}</span></h3><div class="os-grid">${cells}</div></section>`;
+}
+/** 手机：外围科技嵌在板块卡底部，每格两行（名称 / 涨跌 + 小 K 线），省掉单独卡片的高度 */
+function overseasInline() {
+  const cells = overseasData().map(r => `<div class="osm" title="${esc(r.title)}"><span class="nm">${esc(r.o.name)}${r.via ? '<sup>*</sup>' : ''}</span><span class="pc ${sign(r.pct)}">${fmtPct(r.pct, 1)}</span>${sparkK(r.bars, 34, 14)}</div>`).join('');
+  return `<footer class="os-inline mob-only"><b class="os-lab">外围<br>科技</b>${cells}</footer>`;
+}
 function boardsHTML(f) {
   const mb = mainBoards(f);
   const rows = mb.rows.map(b => `<div class="bd${mb.since ? ' three' : ''}"><div><span class="nm">${esc(b.name)}</span><span class="tag">${esc(FAMILY_LABEL[b.fam] ?? b.fam)}${PREFERENCE_EXCLUDED.includes(b.fam) ? ' · 偏好不参与' : ''}</span></div>
-    <div class="v"><small>今日</small><span class="${sign(b.p1)}">${fmtPct(b.p1)}</span></div>${mb.since ? `<div class="v"><small>主跌以来</small><span class="${sign(b.pS)}">${fmtPct(b.pS, 1)}</span></div>` : ''}<div class="v"><small>5日</small><span class="${sign(b.p5)}">${fmtPct(b.p5, 1)}</span></div>
+    <div class="v"><small>今日</small><span class="${sign(b.p1)}">${fmtPct(b.p1)}</span></div>${mb.since ? `<div class="v"><small>主跌以来</small><span class="${sign(b.pS)}">${fmtPct(b.pS, 1)}</span></div>` : ''}<div class="v"><small>5日</small><span class="${sign(b.p5)}">${fmtPct(b.p5, 1)}</span></div>${sparkK(boardBars(b.code), 64, 22)}
     ${b.etf ? `<div class="etf" title="跟踪 ${esc(b.etf.index)}；按截至 ${esc(b.etf.asOf)} 的 20 日成交额选取">ETF：${esc(b.etf.name)}（${esc(b.etf.code)}）· ${esc(b.etf.index)}</div>` : ''}</div>`).join('');
-  return `<section class="card board-card"><h3>${mb.role}<span class="cnt">${esc(mb.note ?? '最多 2 个')}</span></h3>${rows || '<p class="muted">无主线：未出现集体走强且与指数同步的板块</p>'}</section>`;
+  return `<section class="card board-card"><h3>${mb.role}<span class="cnt mid-hide">${esc(mb.note ?? '最多 2 个')}</span><span class="cnt mid-only">${mb.since ? '今日 · 主跌以来 · 5日' : '今日 · 5日'}</span></h3>${rows || '<p class="muted">无主线：未出现集体走强且与指数同步的板块</p>'}${overseasInline()}</section>`;
 }
 function extraHTML(f) {
   if ((f.state.startsWith('大主升') || S.emo?.active) && S.today.top?.ok) {
@@ -863,7 +965,7 @@ function render() {
     $('#col2').innerHTML = ''; $('#col3').innerHTML = ''; return;
   }
   const groups = condGroups(f), G = Object.fromEntries(groups.map(g => [g.key, g]));
-  $('#col1').innerHTML = heroHTML(f) + boardsHTML(f) + mobileConds(groups) + extraHTML(f);
+  $('#col1').innerHTML = heroHTML(f) + boardsHTML(f) + overseasHTML() + mobileConds(groups) + extraHTML(f);
   $('#col2').innerHTML = logHTML() + groupCard(G.res) + groupCard(G.down) + `<div class="merge">${groupCard(G.emo)}${groupCard(G.risk)}${groupCard(G.ref)}</div>`;
   $('#col3').innerHTML = groupCard(G.emo) + groupCard(G.risk) + groupCard(G.ref);
   const alertsOn = load('alertsOn', false);
