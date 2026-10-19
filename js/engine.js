@@ -12,8 +12,8 @@ export const PARAMS = Object.freeze({
   RISK_NEED: 2, F1_LOOKBACK: 40, WARMUP: 20, CYCLE_WINDOW: 40, CYCLE_VOID: 5, THEME_MIN: 10,
   GATE_MA: 10,
 });
-/** 大主升硬门槛：全A（中证全指）、同花顺热股、昨日成交前十（代替通达信昨成交20）收盘都在 10 日线上才允许共振爆发；全A 跌破 10 日线即清仓（与回测 stage2_state.py 一致） */
-export const GATE_BOARDS = Object.freeze({ hot: '883910', z10: '883902' });
+/** 大主升硬门槛：同花顺全A、同花顺热股、昨日成交前十（代替通达信昨成交20）收盘都在 10 日线上才允许共振爆发；全A 跌破 10 日线即清仓（与回测 stage2_state.py 一致） */
+export const GATE_BOARDS = Object.freeze({ qa: '883957', hot: '883910', z10: '883902' });
 
 /** 主题族群（同花顺原生板块代码）；顺序即平局时的优先顺序。 */
 export const FAMILIES = Object.freeze({
@@ -153,7 +153,7 @@ export function features(H, FI, i, P = PARAMS) {
   const hi20 = i >= 19 ? maxDefined(sh.slice(i - 19, i + 1)) : null;
   let rHi = null; if (i >= 19) { rHi = i - 19; for (let k = i - 19; k < i; k++) if (isNum(sh[k]) && sh[k] > sh[rHi]) rHi = k; }
   const above = x => { if (!x) return null; const m = ma(x, P.GATE_MA, i); return isNum(x[i]) && isNum(m) ? x[i] > m : null; };
-  const gA = above(H.c985), gHot = above(H.boards[GATE_BOARDS.hot]?.close), gZ10 = above(H.boards[GATE_BOARDS.z10]?.close);
+  const gA = above(H.boards[GATE_BOARDS.qa]?.close), gHot = above(H.boards[GATE_BOARDS.hot]?.close), gZ10 = above(H.boards[GATE_BOARDS.z10]?.close);
   const gate = gA === false || gHot === false || gZ10 === false ? false : gA && gHot && gZ10 ? true : null;
   return { i, date: H.dates[i], close: sh[i], high: hi[i], m5, m10, m5p, p1, p5sh, amt: amt[i], a20, a60, vr, rsi: rsi[i],
     gA, gHot, gZ10, gate,
