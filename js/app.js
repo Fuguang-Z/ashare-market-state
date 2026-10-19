@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261019e';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019e';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019e';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019e';
+import ds, { OVERSEAS } from './datasource.js?v=20261019f';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019f';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019f';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019f';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
@@ -25,7 +25,7 @@ const S = {
   extra: null,               // 种子之后的已完成日补数：{ boards:{code:{date:close}}, limits:{date:{...}} }，缓存在浏览器
   backfill: { missing: [], boardsDone: 0, limitsDone: 0, complete: true },
   boardK: null, boardKFail: {},          // 板块卡迷你 K 线：{ date, rows:{code:[[日期,开,高,低,收]]} }（已完成日，按日缓存在浏览器）
-  overseas: null, overseasFail: {}, overseasQ: null,   // 外围科技：日 K 按日缓存；日韩盘中现价
+  overseas: null, overseasFail: {}, overseasQ: null, overseasFile: null, overseasFileDay: null,   // 外围科技：日 K 按日缓存；日韩盘中现价；每日更新写的日 K 文件
 };
 
 function load(key, fallback) { try { return JSON.parse(localStorage.getItem(`${STORE}.${key}`)) ?? fallback; } catch { return fallback; } }
@@ -289,10 +289,19 @@ async function boardKRound() {
   if (!r.groups) for (const c of need) S.boardKFail[c] = Date.now();
   save('boardK', S.boardK);
 }
-/** 外围科技：日 K 每天每个指数取一次，过了收定时刻再取一次；每轮最多 2 个请求，其中东财最多 1 个。日韩盘中每轮取一次现价（腾讯）。 */
+/** 外围科技：优先用每日收盘更新写好的 data/overseas_daily.json（东财日 K 由本机统一取，浏览器端常被限流）；
+ * 文件里没有的指数才在浏览器取：每天每个指数一次，过了收定时刻再取一次；每轮最多 2 个请求，其中东财最多 1 个。日韩盘中每轮取一次现价（腾讯）。 */
 async function overseasRound() {
   const date = S.calendar.date, hm = S.calendar.time.slice(0, 5);
   if (S.overseas?.date !== date) S.overseas = { date, items: {} };
+  if (S.overseasFileDay !== date) { S.overseasFileDay = date; S.overseasFile = await staticJSON('overseas_daily.json').catch(() => null); }
+  for (const o of OVERSEAS) {
+    const f = S.overseasFile?.items?.[o.key]; if (!f?.rows?.length) continue;
+    // 日韩收定前，文件里当天那根是取数时的盘中价，丢掉，由腾讯现价画当天示意
+    const rows = f.rows.filter(r => !(o.quote && r[0] === date && hm < o.settle)); if (!rows.length) continue;
+    const it = S.overseas.items[o.key];
+    if (!it || it.viaEtf || it.file || it.rows.at(-1)[0] <= rows.at(-1)[0]) S.overseas.items[o.key] = { at: '99:99', t: Date.now(), rows, viaEtf: null, file: true };
+  }
   const stale = o => { const it = S.overseas.items[o.key]; return !it || (it.at < o.settle && hm >= o.settle) || (it.viaEtf && Date.now() - it.t > 3 * RETRY_MS); };
   let n = 0, east = 0;
   for (const o of OVERSEAS) {
@@ -566,7 +575,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.19e';
+const APP_VERSION = '2026.10.19f';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
