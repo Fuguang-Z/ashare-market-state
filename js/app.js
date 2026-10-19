@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261018a';
-import { replay, wilderRSI, FAMILIES, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261018a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261018a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261018a';
+import ds, { OVERSEAS } from './datasource.js?v=20261019d';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019d';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019d';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019d';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
@@ -163,7 +163,7 @@ const SECTOR_KEYS = [
 ];
 const sectorOfName = name => SECTOR_KEYS.find(([, ks]) => ks.some(k => name.includes(k)))?.[0] ?? null;
 const EXTRA_BOARDS = [...new Set(SECTORS.flatMap(x => x.boards))].filter(c => !ALL_BOARDS.includes(c));
-const POLL_BOARDS = [...ALL_BOARDS, ...EXTRA_BOARDS];
+const POLL_BOARDS = [...Object.values(GATE_BOARDS), ...ALL_BOARDS, ...EXTRA_BOARDS];   // 大主升门槛的两个同花顺指数排最前，盘中先取到
 
 async function ordinaryRound() {
   const date = S.calendar.date;
@@ -510,6 +510,7 @@ const EVENT_TEXT = {
   '共振爆发': lead => `共振爆发：主线板块「${FAMILY_LABEL[lead] ?? lead}」。按规则：可快速提升至重仓（1–2 笔），优先领涨集团或对应 ETF${PREFERENCE_EXCLUDED.includes(lead) ? '（该板块为偏好不参与）' : ''}。`,
   '风险降仓': () => '风险信号叠加：按规则降至半仓。',
   '破位清仓': () => '主线破位：按规则清仓观望。',
+  '全A跌破10日线': () => '全A 跌破 10 日线，主升环境破坏：按规则清仓，转入震荡观望。',
   '转入主跌': () => '指数转入主跌：按规则空仓，不抄底。',
   '主跌结束（企稳）': () => '指数站上 5 日线，主跌暂告段落：转入筑底，继续空仓等待共振。',
   '主线切换': lead => `主线切换至「${FAMILY_LABEL[lead] ?? lead}」：按规则调仓，仓位不变。`,
@@ -565,7 +566,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.18a';
+const APP_VERSION = '2026.10.19d';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -614,11 +615,14 @@ function condGroups(f) {
   const famRead = isNum(f.f5?.[lead]) ? `${FAMILY_LABEL[lead] ?? lead} 近5日 ${fmtPct(f.f5[lead], 1)}，今日前6含 ${f.cnt}、5日前6含 ${f.cnt5}` : '板块数据未就绪';
   const syncRead = isNum(f.fT?.[lead]) && isNum(f.p1) ? `指数 ${fmtPct(f.p1)}，${lead} ${fmtPct(f.fT[lead])}` : '未知';
   const f1v = f.f1full ? true : f.f1part ? null : false;
+  const g = v => (v === true ? '✓' : v === false ? '×' : '?');
+  const gateRead = `全A ${g(f.gA)}　热股 ${g(f.gHot)}　昨成交10 ${g(f.gZ10)}`;
   const holding = f.state.startsWith('大主升');
   const RISK_LABEL = { '主线族巨震': '主线板块巨震', '主线族连续2日跌破5日线': '主线板块连续2日跌破5日线' };   // 引擎内部名 → 显示名
   const riskItem = (name, short, read) => [holding ? (f.risk.includes(name) ? true : f.riskUnknown.includes(name) ? null : false) : null, RISK_LABEL[name] ?? name, short, holding ? read : '仅在主升状态检查'];
   return [
     { key: 'res', title: '共振条件', items: [
+      [f.gate, '全A、热股、昨成交10 都在 10 日线上', '主升环境', gateRead, 'gate'],
       [f.A1, '指数站上 5 日线和 10 日线，5 日线上拐', '站上均线', isNum(f.close) ? `上证 ${f.close.toFixed(2)}，MA5 ${f.m5?.toFixed(2) ?? '—'}，MA10 ${f.m10?.toFixed(2) ?? '—'}` : '未知'],
       [isNum(f.vr) ? f.volOk === true : null, f.f1full ? `量能放大（≥ ${P.VR_UP} 倍）` : f.f1part ? `量能放大（未完成二次探底，需 ≥ ${P.VR_UP_SOFT} 倍）` : '量能放大（超跌后须先出现第一波反弹）', '量能放大', volText],
       [f.volVsDecline, '量能不低于此前下跌阶段', '量超下跌段', isNum(f.a60) ? `前 60 日均量 ${fmtYi(f.a60)}` : '60 日均量不足'],
@@ -651,11 +655,11 @@ function condGroups(f) {
   ];
 }
 const ICON = { y: '✓', n: '✗', u: '?' };
-function itemHTML([v, label, short, read], mobile = false) {
+function itemHTML([v, label, short, read, extra], mobile = false) {
   const c = cls3(v);
   const tag = mobile ? 'button' : 'li';
   const state = c === 'y' ? '满足' : c === 'n' ? '不满足' : '数据未知';
-  return `<${tag}${mobile ? ` type="button" aria-label="${esc(label)}，${state}，${esc(read)}"` : ''} class="ci ${c}" data-label="${esc(label)}" data-read="${esc(read)}" title="${esc(label)}：${esc(read)}"><span class="ic ${c}" aria-label="${state}">${ICON[c]}</span><span class="lab"><span class="full">${esc(label)}</span><span class="short">${esc(short)}</span></span><span class="rd">${esc(read)}</span></${tag}>`;
+  return `<${tag}${mobile ? ` type="button" aria-label="${esc(label)}，${state}，${esc(read)}"` : ''} class="ci ${c}${extra ? ` ${extra}` : ''}" data-label="${esc(label)}" data-read="${esc(read)}" title="${esc(label)}：${esc(read)}"><span class="ic ${c}" aria-label="${state}">${ICON[c]}</span><span class="lab"><span class="full">${esc(label)}</span><span class="short">${esc(short)}</span></span><span class="rd">${esc(read)}</span></${tag}>`;
 }
 function countHTML(items) {
   const hit = items.filter(x => x[0] === true).length, unk = items.filter(x => x[0] !== true && x[0] !== false).length;
@@ -664,7 +668,7 @@ function countHTML(items) {
 function groupCard(g, extra = '') {
   const no = { res: '01', down: '02', emo: '03', risk: '04', ref: '05' }[g.key];
   const idle = g.items.length > 1 && g.items.every(x => x[3] === g.items[0][3]) && g.items[0][3] === '仅在主升状态检查';
-  return `<section class="card condition-card desk-only ${extra}${idle ? ' idle' : ''}" data-group="${g.key}"><h3><span class="section-no" aria-hidden="true">${no}</span>${esc(g.title)}${idle ? '<small class="idle-note">仅在主升状态检查</small>' : ''}${countHTML(g.items)}</h3><ul class="cl">${g.items.map(item => itemHTML(item)).join('')}</ul></section>`;
+  return `<section class="card condition-card desk-only ${extra}${idle ? ' idle' : ''}" data-group="${g.key}"><h3><span class="section-no" aria-hidden="true">${no}</span>${esc(g.title)}${idle ? '<small class="idle-note">仅在主升状态检查</small>' : ''}${g.items.filter(x => x[4] === 'gate').map(x => `<small class="gate-note ${cls3(x[0])}">${esc(x[2])} ${esc(x[3])}</small>`).join('')}${countHTML(g.items)}</h3><ul class="cl">${g.items.map(item => itemHTML(item)).join('')}</ul></section>`;
 }
 function mobileConds(groups) {
   return `<section class="card conds mob-only" aria-label="全部判定条件，点按查看读数">${groups.map(g => `<div class="mgroup" data-group="${g.key}"><span class="gt">${esc(g.title.replace('条件', '').replace('信号', ''))}${countHTML(g.items)}</span>${g.items.map(item => itemHTML(item, true)).join('')}</div>`).join('')}</section>`;

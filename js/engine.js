@@ -10,7 +10,10 @@ export const PARAMS = Object.freeze({
   OS_RSI: 35, PANIC_DOWN: 70, PANIC_RSI: 30,
   H_MIN: 5, LOSS_DOWN: 15, RETREAT_DOWN: 30, LAD3_MIN: 3, EXIT_H_DROP: 3, EXIT_LAD3_MAX: 2, EXIT_BROKEN_RATE: 0.5,
   RISK_NEED: 2, F1_LOOKBACK: 40, WARMUP: 20, CYCLE_WINDOW: 40, CYCLE_VOID: 5, THEME_MIN: 10,
+  GATE_MA: 10,
 });
+/** 大主升硬门槛：全A（中证全指）、同花顺热股、昨日成交前十（代替通达信昨成交20）收盘都在 10 日线上才允许共振爆发；全A 跌破 10 日线即清仓（与回测 stage2_state.py 一致） */
+export const GATE_BOARDS = Object.freeze({ hot: '883910', z10: '883902' });
 
 /** 主题族群（同花顺原生板块代码）；顺序即平局时的优先顺序。 */
 export const FAMILIES = Object.freeze({
@@ -149,7 +152,11 @@ export function features(H, FI, i, P = PARAMS) {
   const panic = tri(isNum(dn) && isNum(rsi[i]), dn >= P.PANIC_DOWN && rsi[i] < P.PANIC_RSI);
   const hi20 = i >= 19 ? maxDefined(sh.slice(i - 19, i + 1)) : null;
   let rHi = null; if (i >= 19) { rHi = i - 19; for (let k = i - 19; k < i; k++) if (isNum(sh[k]) && sh[k] > sh[rHi]) rHi = k; }
+  const above = x => { if (!x) return null; const m = ma(x, P.GATE_MA, i); return isNum(x[i]) && isNum(m) ? x[i] > m : null; };
+  const gA = above(H.c985), gHot = above(H.boards[GATE_BOARDS.hot]?.close), gZ10 = above(H.boards[GATE_BOARDS.z10]?.close);
+  const gate = gA === false || gHot === false || gZ10 === false ? false : gA && gHot && gZ10 ? true : null;
   return { i, date: H.dates[i], close: sh[i], high: hi[i], m5, m10, m5p, p1, p5sh, amt: amt[i], a20, a60, vr, rsi: rsi[i],
+    gA, gHot, gZ10, gate,
     A1, D1, pt, top, top5d, f5, fT, lead, weak, cnt, cnt5, collective, sync, mainFall, volVsDecline,
     h, dn, up, brk, lad3, theme, themeName: H.limits.themeName?.[i] ?? null, themeHot, hmax5, hmax10, hExpand, noLoss, ladderOk, brokenRate, panic, hi20, rHi, boardsOk };
 }
@@ -188,7 +195,7 @@ export function replay(H, P = PARAMS) {
     const f1full = f1.stage === 4 || lastOs === null || i - lastOs > P.F1_LOOKBACK;
     const f1part = f1.stage === 2 || f1.stage === 3;
     const volOk = isNum(F.vr) ? ((f1full && F.vr >= P.VR_UP) || (f1part && F.vr >= P.VR_UP_SOFT)) : null;
-    const triggerParts = [F.A1, F.collective, F.sync, F.volVsDecline, volOk];
+    const triggerParts = [F.gate, F.A1, F.collective, F.sync, F.volVsDecline, volOk];
     const trigger = triggerParts.every(T);
     const triggerUnknown = !trigger && triggerParts.some(v => v === null) && !triggerParts.some(v => v === false);
     // 风险信号（针对持有中的主线族）
@@ -207,6 +214,7 @@ export function replay(H, P = PARAMS) {
     if (state === '大主升' || state === '大主升-减仓') {
       const leadNeg = isNum(F.f5[leadHold]) ? F.f5[leadHold] < 0 : null;
       if (T(F.D1) && (leadNeg === true || T(F.mainFall))) { state = '主跌'; ev = '破位清仓'; }
+      else if (F.gA === false) { state = '震荡'; ev = '全A跌破10日线'; }   // 只有确知跌破才离场
       else if (state === '大主升' && risk.length >= P.RISK_NEED) { state = '大主升-减仓'; ev = '风险降仓'; }
       else if (trigger && F.lead !== leadHold) { leadHold = F.lead; ev = '主线切换'; }
     } else if (state === '主跌') {
