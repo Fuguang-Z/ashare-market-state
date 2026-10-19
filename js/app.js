@@ -2,13 +2,14 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261019h';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019h';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019h';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019h';
+import ds, { OVERSEAS } from './datasource.js?v=20261019k';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019k';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019k';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019k';
 
 const TICK_MS = 60000;
-const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
+const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
+const QUICK_MS = 15000;        // 指数与成交额（腾讯，实测数据延迟 0–4 秒、不限流）每 15 秒单独刷新一次，东财请求仍按 60 秒一轮
 const STORE = 'ashare-market-state.v1';
 const $ = sel => document.querySelector(sel);
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
@@ -177,8 +178,11 @@ async function ordinaryRound() {
   const n = POLL_BOARDS.length, pick = [];
   for (let k = 0; k < BOARDS_PER_TICK; k++) pick.push(POLL_BOARDS[(S.boardCursor + k) % n]);
   S.boardCursor = (S.boardCursor + BOARDS_PER_TICK) % n;
-  const tb = await ds.getTHSBoardToday([...new Set(pick)]);
-  for (const r of tb.rows ?? []) S.today.boards[r.code] = r;
+  const uniq = [...new Set(pick)];
+  for (let k = 0; k < uniq.length; k += 10) {   // 数据层每次最多 10 个
+    const tb = await ds.getTHSBoardToday(uniq.slice(k, k + 10));
+    for (const r of tb.rows ?? []) S.today.boards[r.code] = r;
+  }
   // 成交额前列（领涨集团）：主升状态每轮，其余每 3 轮
   const st = S.result?.final?.state ?? '';
   if (st.startsWith('大主升') || S.emo?.active || S.tick % 3 === 0) { const top = await ds.getTopTurnover(20); if (top.ok) S.today.top = top; }
@@ -390,6 +394,17 @@ async function warmup() {
   updateBackfill();
 }
 
+/** 快速轮：盘中只刷新腾讯指数报价与成交额，随即重新判定并渲染（主轮在等同花顺等慢请求时照样运行，判定与渲染是同步的，不会交错） */
+async function quickTick() {
+  if (S.quickBusy || !S.calendar?.refreshRecommended || !S.result) return;
+  S.quickBusy = true;
+  try {
+    const q = await ds.getIndexQuotes(); if (q.ok) S.today.quotes = q;
+    const tv = await ds.getProjectedTurnover(); if (tv.ok) S.today.turnover = tv;
+    S.lastTickAt = new Date(); evaluate(); render();
+  } catch (e) { /* 快速轮失败不影响主轮 */ } finally { S.quickBusy = false; }
+}
+
 async function tick() {
   if (S.busy) return;
   S.busy = true;
@@ -585,7 +600,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.19h';
+const APP_VERSION = '2026.10.19k';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -1042,3 +1057,4 @@ $('#alert-btn').addEventListener('click', async () => {
 render();
 tick();
 setInterval(tick, TICK_MS);
+setInterval(quickTick, QUICK_MS);
