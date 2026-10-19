@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261019m';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019m';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019m';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019m';
+import ds, { OVERSEAS } from './datasource.js?v=20261019n';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019n';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019n';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019n';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -606,7 +606,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.19m';
+const APP_VERSION = '2026.10.19n';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -907,9 +907,9 @@ function extraHTML(f) {
     const hb = [...sec].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
     const asOf = j < H.dates.length - 1 || partial ? `截至 ${esc(H.dates[j].slice(5))}` : '今日';
     const td = (v, d = 2) => `<td class="${sign(v)}">${fmtPct(v, d)}</td>`;
-    const body = sec.map(r => `<tr class="sec${r.hotToday ? ' hot' : ''}" title="${esc(r.title)}"><td>${esc(r.name)}${r.pref ? ' <small class="muted">偏好不参与</small>' : ''}${r.hotToday ? ` <small class="hot-tag">今日热点 ×${r.hotToday}</small>` : r.hotRecent ? ` <small class="muted">近期热点 ${esc(r.hotRecent)}</small>` : ''}</td>${td(r.p1)}${td(r.p5, 1)}</tr>`
-      + (r.branches ?? []).map(b => `<tr class="br"><td>└ ${esc(b.name)}</td>${td(b.p1)}${td(b.p5, 1)}</tr>`).join('')).join('');
-    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${sec.length} 个大类 · ${asOf} · 按${fs.k === 'fT' ? dayLabel : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><table class="mini sec-table"><thead><tr><th>板块</th>${th('fT', dayLabel)}${th('f5', '近5日')}</tr></thead><tbody>${body}</tbody></table>
+    const body = sec.map((r, k) => `<tr class="sec${r.hotToday ? ' hot' : ''}${k >= XP_N ? ' more' : ''}" title="${esc(r.title)}"><td>${esc(r.name)}${r.pref ? ' <small class="muted">偏好不参与</small>' : ''}${r.hotToday ? ` <small class="hot-tag">今日热点 ×${r.hotToday}</small>` : r.hotRecent ? ` <small class="muted">近期热点 ${esc(r.hotRecent)}</small>` : ''}</td>${td(r.p1)}${td(r.p5, 1)}</tr>`
+      + (r.branches ?? []).map(b => `<tr class="br${k >= XP_N ? ' more' : ''}"><td>└ ${esc(b.name)}</td>${td(b.p1)}${td(b.p5, 1)}</tr>`).join('')).join('');
+    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${sec.length} 个大类 · ${asOf} · 按${fs.k === 'fT' ? dayLabel : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><table class="mini sec-table xp${S.xp?.sec ? ' open' : ''}"><thead><tr><th>板块</th>${th('fT', dayLabel)}${th('f5', '近5日')}</tr></thead><tbody>${body}</tbody></table>${xpBtn('sec', sec.length, '个大类')}
     <div class="fam-line mob-only"><p><b>强</b>${hb.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${hb.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
   }
   return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${head}</span></h3><table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>
@@ -944,6 +944,9 @@ function indexSegs() {
   return segs;
 }
 const dspan = (g, now = false) => `${g.start.slice(2).replace(/-/g, '.')}${now ? '–至今' : g.end && g.end !== g.start ? `–${g.end.slice(5).replace('-', '.')}` : ''}`;
+/** 手机端（≤860 宽）板块强弱与两条时间线只显示最近 XP_N 段，其余点「展开全部」；桌面与中屏是一屏布局，不折叠 */
+const XP_N = 5;
+const xpBtn = (key, n, unit) => (n > XP_N ? `<button type="button" class="xp-btn" data-xp="${key}">${S.xp?.[key] ? '收起' : `展开全部（共 ${n} ${unit}）`}</button>` : '');
 function logHTML() {
   const log = load(`log.${S.calendar?.date}`, []).slice(0, 2);
   const idxSegs = indexSegs().reverse();
@@ -958,7 +961,7 @@ function logHTML() {
     if (labelBoard(g.cycleBoard ?? g.board ?? '').startsWith('资源')) tag.push('偏好不参与');
     if (g.phase === '情绪主升' && g.leaderTop && g.leaderTop.date <= (g.end ?? '9999')) tag.push(`${g.leaderTop.date.slice(5)} 龙头${g.leaderTop.signal}→观望`);
     const pos = g.phase === '情绪试探' || g.phase === '退潮' ? '空仓' : g.phase === '情绪主升' ? '半仓' : cyclePosition(g.phase);
-    return `<li class="${g.phase === '退潮' ? 'down' : g.phase === '情绪试探' ? 'flat' : 'up'}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
+    return `<li class="${g.phase === '退潮' ? 'down' : g.phase === '情绪试探' ? 'flat' : 'up'}${k >= XP_N ? ' more' : ''}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
   };
   const cur = idxSegs[0], ep = S.emo?.phase;
   const st = leaderStop();
@@ -967,8 +970,8 @@ function logHTML() {
   const nowShort = now.replace(/<span class="stop-read">[\s\S]*?<\/span>/, '');
   return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span><span class="cnt now-h">${nowShort}</span></h3><div class="log-top"><ul class="log ${log.length ? 'hot' : 'idle'}">
     ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span>${oppHTML()}</div>
-    <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul></div>
-    <div class="tlcol"><h4>情绪线</h4><ul class="log tl">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul></div></div></section>`;
+    <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl xp${S.xp?.idx ? ' open' : ''}">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}${k >= XP_N ? ' more' : ''}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul>${xpBtn('idx', idxSegs.length, '段')}</div>
+    <div class="tlcol"><h4>情绪线</h4><ul class="log tl xp${S.xp?.emo ? ' open' : ''}">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul>${xpBtn('emo', emoSegs.length, '段')}</div></div></section>`;
 }
 
 /** 机会提示（小框）：主跌期不提示；震荡 / 筑底 / 主升期出现机构（共振爆发 → 大主升）或情绪（情绪主升）机会时列出仓位档位。只列档位，不写买卖。 */
@@ -1040,6 +1043,8 @@ function render() {
   $('#alert-btn').setAttribute('aria-pressed', String(alertsOn));
 }
 document.addEventListener('click', e => {
+  const xb = e.target.closest('[data-xp]');
+  if (xb) { S.xp = { ...(S.xp ?? {}), [xb.dataset.xp]: !S.xp?.[xb.dataset.xp] }; render(); return; }
   const sb = e.target.closest('[data-sort]');
   if (sb) {
     const cur = load('famSort', { k: 'f5', d: -1 }), k = sb.dataset.sort;
