@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261019g';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019g';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019g';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019g';
+import ds, { OVERSEAS } from './datasource.js?v=20261019h';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019h';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019h';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019h';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 10;   // 同花顺板块实时：每次最多 10 个
@@ -498,11 +498,13 @@ function evaluateEmotion(H, rows) {
       if (!r || !p || todayPool[h.code]) continue;
       const chg = (r.close / p.close - 1) * 100, amp = (r.high - r.low) / p.close * 100, fh = (r.close / r.high - 1) * 100;
       const sig = amp >= P.SHAKE_AMP && fh <= -P.SHAKE_FROM_HIGH ? '巨震' : chg <= P.DROP ? '大跌' : (nm === '伴生线' || ln.chain.length === 1) && chg < P.STALL && !pools[dates[i - 1]]?.[h.code] ? '滞涨' : null;
-      if (sig) hints.push({ kind: '高标见顶', line: nm, name: h.name, signal: sig, firsts: Object.entries(todayPool).filter(([c]) => !ln.chain.some(x => x.code === c)).slice(0, 4).map(([, v]) => v[0]) });
+      if (sig) hints.push({ kind: '高标见顶', line: nm, isLeader: nm === '主线' && ln.chain.length === 1, name: h.name, signal: sig, firsts: Object.entries(todayPool).filter(([c]) => !ln.chain.some(x => x.code === c)).slice(0, 4).map(([, v]) => v[0]) });
     }
     if (active.main.rounds.length && todayPool[active.leader.code]) hints.push({ kind: '龙头反抽', name: active.leader.name });
   }
-  S.emo = { cycles: all, active, last, phase, since, position: cyclePosition(phase), hints, lastDate };
+  // 龙头已出现首次见顶信号（回放确认，或今日盘中试算）→ 情绪仓位由半仓转观望
+  const topped = !!active?.leaderTop || hints.some(h => h.isLeader);
+  S.emo = { cycles: all, active, last, phase, since, topped, position: cyclePosition(phase, topped), hints, lastDate };
 }
 
 function sinceDate(rows) {
@@ -583,7 +585,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.19g';
+const APP_VERSION = '2026.10.19h';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -767,7 +769,7 @@ function heroHTML(f) {
     <div class="hero-heading"><i class="state-dot" aria-hidden="true"></i>指数线（机构）<span class="eyebrow">MARKET STATE</span></div>
     <div class="hero-top"><div class="stage">${esc(meta.name)}</div><div class="position-block"><span class="position-label">指数仓位</span><span class="pos">${esc(POSITION[f.state] ?? '—')}</span></div></div>
     <p class="sub">${esc(meta.sub)}${r.stateSince ? ` · <span>自 ${esc(r.stateSince)} 起 ${days}</span>` : ''}</p>
-    <div class="act">${esc(pref ? '主线为偏好不参与的板块（外围驱动）：按规则观望' : ACTION[f.state])}</div>
+    <div class="act">${esc(pref ? '主线为偏好不参与的板块（外围驱动）：按规则观望' : ACTION[f.state])}</div>${oppHTML('mob-only')}
     <div class="kpis">
       ${kpi('上证指数', isNum(f.close) ? `${f.close.toFixed(2)} <small class="${sign(f.p1)}">${fmtPct(f.p1)}</small>` : '—', '')}
       ${kpi(r.todayAppended && S.today.amtSource ? `全天量能（${S.today.amtSource.replace('全天', '')}）` : '成交额', isNum(f.amt) ? `${fmtYi(f.amt).replace(' ', '')} <small>×${isNum(f.vr) ? f.vr.toFixed(2) : '—'}</small>` : '—', '',
@@ -933,7 +935,8 @@ function logHTML() {
     else tag.push(`高标 ${g.leader}`, g.board ?? '—', `${g.topOf}${g.signal}`);
     if (g.comp && g.phase !== '退潮') tag.push(`伴生 ${g.comp.join('→')}`);
     if (labelBoard(g.cycleBoard ?? g.board ?? '').startsWith('资源')) tag.push('偏好不参与');
-    const pos = g.phase === '情绪试探' || g.phase === '退潮' ? '空仓' : cyclePosition(g.phase);
+    if (g.phase === '情绪主升' && g.leaderTop && g.leaderTop.date <= (g.end ?? '9999')) tag.push(`${g.leaderTop.date.slice(5)} 龙头${g.leaderTop.signal}→观望`);
+    const pos = g.phase === '情绪试探' || g.phase === '退潮' ? '空仓' : g.phase === '情绪主升' ? '半仓' : cyclePosition(g.phase);
     return `<li class="${g.phase === '退潮' ? 'down' : g.phase === '情绪试探' ? 'flat' : 'up'}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
   };
   const cur = idxSegs[0], ep = S.emo?.phase;
@@ -942,9 +945,31 @@ function logHTML() {
   const now = `机构线 <b>${esc(segName(cur?.state ?? '—'))}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>${st ? ` · ${stopTag}<span class="stop-read">${esc(st.read)}</span>` : ''}`;
   const nowShort = now.replace(/<span class="stop-read">[\s\S]*?<\/span>/, '');
   return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span><span class="cnt now-h">${nowShort}</span></h3><div class="log-top"><ul class="log ${log.length ? 'hot' : 'idle'}">
-    ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span></div>
+    ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span>${oppHTML()}</div>
     <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul></div>
     <div class="tlcol"><h4>情绪线</h4><ul class="log tl">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul></div></div></section>`;
+}
+
+/** 机会提示（小框）：主跌期不提示；震荡 / 筑底 / 主升期出现机构（共振爆发 → 大主升）或情绪（情绪主升）机会时列出仓位档位。只列档位，不写买卖。 */
+function oppHTML(extra = '') {
+  const f = S.result?.final, st = f?.state;
+  if (!st) return '';
+  if (st === '主跌') return extra ? '' : '<div class="opp idle"><b>机会</b><span>主跌期不提示</span></div>';
+  const items = [];
+  if (st.startsWith('大主升')) {
+    const lead = f.leadShown, pref = PREFERENCE_EXCLUDED.includes(lead);
+    items.push(`<span class="o ${pref ? 'flat' : 'up'}">机构 · ${esc(segName(st))}（主线 ${esc(FAMILY_LABEL[lead] ?? lead)}）· ${pref ? '偏好不参与' : esc(POSITION[st])}</span>`);
+  }
+  const e = S.emo, a = e?.active;
+  if (a && !a.voided) {
+    const pref = labelBoard(a.leader.board ?? '').startsWith('资源');
+    const lt = a.leaderTop ? `${a.leaderTop.date.slice(5)} ${a.leaderTop.signal}` : e.hints?.find(h => h.isLeader)?.signal ? `今日盘中${e.hints.find(h => h.isLeader).signal}` : '';
+    if (pref) items.push(`<span class="o flat">情绪 · 龙头 ${esc(a.leader.name)}（${esc(labelBoard(a.leader.board))}）· 偏好不参与</span>`);
+    else if (e.position === '半仓') items.push(`<span class="o up">情绪 · 情绪主升 龙头 ${esc(a.leader.name)}（${esc(labelBoard(a.leader.board))}）· 半仓，龙头见顶即观望</span>`);
+    else items.push(`<span class="o flat">情绪 · 龙头 ${esc(a.leader.name)} ${esc(lt || '已见顶')} · 观望</span>`);
+  }
+  if (extra && !items.length) return '';   // 手机端只在有机会时显示，替换首卡「按规则」一行
+  return `<div class="opp${items.length ? '' : ' idle'}${extra ? ` ${extra}` : ''}"><b>机会</b>${items.join('') || '<span>暂无机构或情绪机会</span>'}</div>`;
 }
 
 function statusChips() {

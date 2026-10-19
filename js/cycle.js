@@ -3,7 +3,7 @@
  * 脉络：指数止跌 → 龙头主升、打开高度 → 龙头震荡，补涨开启 → 高标依次见顶、新高标接力 → 龙头反抽双顶 → 情绪退潮。
  * 主线之外可有一条伴生线，随主线周期一起结束。
  */
-import { GENERIC_THEME } from './engine.js?v=20261019g';
+import { GENERIC_THEME } from './engine.js?v=20261019h';
 
 export const CYCLE_PARAMS = Object.freeze({
   PANIC_DOWN: 30, SHAKE_AMP: 12.0, SHAKE_FROM_HIGH: 2.0, DROP: -5.0, STALL: 3.0, WIN: 3, STRENGTH: 6, STRENGTH_RES: 5, RES_LOOK: 5, HOLD: 3,
@@ -202,6 +202,7 @@ export function cycleReplay({ dates: D, pools: P, kline, feat, params = CYCLE_PA
       if (!ln) continue;
       const sig = signal(ln, i, isComp || ln.chain.length === 1);
       if (!sig) continue;
+      if (!isComp && ln.chain.length === 1 && !cur.leaderTop) cur.leaderTop = { date: d, signal: sig };   // 龙头首次见顶信号：情绪仓位由半仓转观望
       const s = successor(ln, i, used, cur.resonance ? cur.leader.board : null);
       if (!s) continue;
       const old = ln.chain.at(-1);
@@ -224,28 +225,32 @@ export function emoAlertEvents({ active, last, hints = [] }, today, known = {}, 
   const firstSeen = key => { if (!k[key]) k[key] = today; return k[key] === today; };
   const a = active, c = active ?? last;
   if (a && a.start > seedThrough && firstSeen(`C|${a.start}|${a.leader.code}`))
-    evs.push(['情绪主升', `情绪周期启动${a.start === today ? '' : `（自 ${a.start.slice(5)} 起）`}：龙头 ${a.leader.name}（${labelBoard(a.leader.board)}）打开高度。按规则情绪仓位半仓，只参与龙头与第一轮补涨。`]);
+    evs.push(['情绪主升', `情绪周期启动${a.start === today ? '' : `（自 ${a.start.slice(5)} 起）`}：龙头 ${a.leader.name}（${labelBoard(a.leader.board)}）打开高度。按规则情绪仓位半仓，龙头出现见顶信号即转观望；补涨不参与。`]);
+  if (a?.leaderTop && a.leaderTop.date > seedThrough && firstSeen(`T|${a.start}|${a.leaderTop.date}`))
+    evs.push(['龙头见顶', `龙头 ${a.leader.name} ${a.leaderTop.date === today ? '今日' : a.leaderTop.date.slice(5)} ${a.leaderTop.signal}：按规则情绪仓位由半仓转观望。`]);
   if (a) for (const ln of [a.main, a.comp]) for (const rd of ln?.rounds ?? []) {
     const isMain = ln === a.main;
     if (rd.topDate <= seedThrough || !firstSeen(`R|${a.start}|${isMain ? 'M' : 'C'}|${rd.round}|${rd.code}`)) continue;
-    evs.push([isMain ? `第${rd.round}轮补涨` : '伴生线接力', `${rd.topOf} ${rd.signal}，新高标 ${rd.name}（${rd.board ?? '—'}）自 ${rd.start.slice(5)} 起接力。${isMain ? (rd.round === 1 ? '按规则第一轮补涨轻仓。' : '第二轮及以后补涨按规则观望。') : ''}`]);
+    evs.push([isMain ? `第${rd.round}轮补涨` : '伴生线接力', `${rd.topOf} ${rd.signal}，新高标 ${rd.name}（${rd.board ?? '—'}）自 ${rd.start.slice(5)} 起接力。${isMain ? '补涨按规则观望。' : ''}`]);
   }
   if (c?.end === today && !c.voided) evs.push(['情绪退潮', `情绪周期结束（${c.endReason}）：按规则清掉情绪仓位，退潮期不开仓。`]);
   for (const h of hints) {
-    if (h.kind === '高标见顶') evs.push([`${h.line}高标见顶`, `${h.line}高标 ${h.name} 今日${h.signal}：留意新一轮补涨启动（今日首板：${h.firsts.join('、') || '—'}）。`]);
+    if (h.kind === '高标见顶') evs.push(h.isLeader ? ['龙头见顶', `龙头 ${h.name} 今日盘中${h.signal}：收盘仍成立则情绪仓位由半仓转观望。`]
+      : [`${h.line}高标见顶`, `${h.line}高标 ${h.name} 今日${h.signal}：留意新一轮补涨启动（今日首板：${h.firsts.join('、') || '—'}）。`]);
     if (h.kind === '龙头反抽') evs.push(['龙头反抽', `龙头 ${h.name} 反抽涨停：周期进入末段，当前高标断板即退潮。`]);
   }
   return { events: evs, known: k };
 }
 
-/** 情绪线仓位档位：情绪主升半仓、第 1 轮补涨轻仓、之后观望 */
-export const cyclePosition = phase => (phase === '情绪主升' ? '半仓' : phase === '第1轮补涨' ? '轻仓' : '空仓');
+/** 情绪线仓位档位（2026-10-19 按回测改）：情绪主升半仓，龙头出现首次见顶信号（巨震/大跌/滞涨）即转观望；补涨不参与（观望）；其余空仓。
+ * 回测见 研究/过渡期回测.md：机械执行原档位（第 1 轮补涨轻仓）亏损，改为龙头见顶即走后与指数线合并 +29.7% → +49.4%。 */
+export const cyclePosition = (phase, topped = false) => (phase === '情绪主升' ? (topped ? '观望' : '半仓') : /补涨$/.test(phase) ? '观望' : '空仓');
 
 /** 把周期列表展开成逐段时间线（情绪主升 → 第 N 轮补涨 → 退潮），供界面与提醒使用 */
 export function cycleSegments(cycles, lastDate) {
   const segs = [];
   for (const c of cycles) {
-    const marks = [{ start: c.start, phase: c.voided ? '情绪试探' : '情绪主升', leader: c.leader.name, board: c.leader.board }];
+    const marks = [{ start: c.start, phase: c.voided ? '情绪试探' : '情绪主升', leader: c.leader.name, board: c.leader.board, leaderTop: c.leaderTop ?? null }];
     for (const r of c.main.rounds) marks.push({ start: r.start, phase: `第${r.round}轮补涨`, leader: r.name, board: r.board, topOf: r.topOf, signal: r.signal, topDate: r.topDate });
     marks.forEach((m, k) => {
       const next = marks[k + 1];
