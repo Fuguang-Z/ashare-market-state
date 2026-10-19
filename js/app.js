@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261019k';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019k';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019k';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019k';
+import ds, { OVERSEAS } from './datasource.js?v=20261019l';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261019l';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261019l';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261019l';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -304,16 +304,7 @@ function expectedLast(o, date, hm) {
  * 文件缺某个指数、或文件已过期（本机没开机、没跑更新）时才在浏览器取，取不到仍显示文件里的旧数据：每天每个指数一次，过了收定时刻再取一次；每轮最多 2 个请求，其中东财最多 1 个。日韩盘中每轮取一次现价（腾讯）。 */
 async function overseasRound() {
   const date = S.calendar.date, hm = S.calendar.time.slice(0, 5);
-  if (S.overseas?.date !== date) S.overseas = { date, items: {} };
-  if (S.overseasFileDay !== date) { S.overseasFileDay = date; S.overseasFile = await staticJSON('overseas_daily.json').catch(() => null); }
-  for (const o of OVERSEAS) {
-    const f = S.overseasFile?.items?.[o.key]; if (!f?.rows?.length) continue;
-    // 日韩收定前，文件里当天那根是取数时的盘中价，丢掉，由腾讯现价画当天示意
-    const rows = f.rows.filter(r => !(o.quote && r[0] === date && hm < o.settle)); if (!rows.length) continue;
-    const it = S.overseas.items[o.key], fileLast = rows.at(-1)[0], itLast = it?.rows?.at(-1)?.[0];
-    if (!it || it.file || itLast < fileLast || (it.viaEtf && itLast <= fileLast))
-      S.overseas.items[o.key] = { at: '99:99', t: Date.now(), rows, viaEtf: null, file: true, fileStale: fileLast < expectedLast(o, date, hm) };
-  }
+  await applyOverseasFile();
   const stale = o => { const it = S.overseas.items[o.key]; return !it || it.fileStale || (it.at < o.settle && hm >= o.settle) || (it.viaEtf && Date.now() - it.t > 3 * RETRY_MS); };
   let n = 0, east = 0;
   for (const o of OVERSEAS) {
@@ -326,6 +317,20 @@ async function overseasRound() {
   if (n) save('overseasK', S.overseas);
   const dow = new Date(`${date}T12:00:00+08:00`).getUTCDay();
   if (!S.overseasQ || (dow >= 1 && dow <= 5 && hm >= '08:00' && hm <= '14:40')) { const q = await ds.getOverseasQuotes(); if (q.ok) S.overseasQ = q; }
+}
+/** 读每日更新写好的外围日 K 文件并套用（页面一打开就调用，不必等第一轮轮询；文件每天只取一次） */
+async function applyOverseasFile() {
+  const date = S.calendar?.date, hm = S.calendar?.time?.slice(0, 5); if (!date) return;
+  if (S.overseas?.date !== date) S.overseas = { date, items: {} };
+  if (S.overseasFileDay !== date) { S.overseasFileDay = date; S.overseasFile = await staticJSON('overseas_daily.json').catch(() => null); }
+  for (const o of OVERSEAS) {
+    const f = S.overseasFile?.items?.[o.key]; if (!f?.rows?.length) continue;
+    // 日韩收定前，文件里当天那根是取数时的盘中价，丢掉，由腾讯现价画当天示意
+    const rows = f.rows.filter(r => !(o.quote && r[0] === date && hm < o.settle)); if (!rows.length) continue;
+    const it = S.overseas.items[o.key], fileLast = rows.at(-1)[0], itLast = it?.rows?.at(-1)?.[0];
+    if (!it || it.file || itLast < fileLast || (it.viaEtf && itLast <= fileLast))
+      S.overseas.items[o.key] = { at: '99:99', t: Date.now(), rows, viaEtf: null, file: true, fileStale: fileLast < expectedLast(o, date, hm) };
+  }
 }
 
 /** 种子过期时补齐「种子之后、今天之前」的板块收盘与涨跌停统计。每轮限量，进度存浏览器，刷新页面不重复取。 */
@@ -410,6 +415,7 @@ async function tick() {
   S.busy = true;
   try {
     S.calendar = await ds.getTradingCalendar();
+    await applyOverseasFile();   // 外围日 K 文件先套用，页面一打开就有 K 线
     ds.beginRefresh();
     const needWarm = !S.seed || !S.indexDaily || S.indexDaily.date !== S.calendar.date;
     if (needWarm) {
@@ -600,7 +606,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.19k';
+const APP_VERSION = '2026.10.19l';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },

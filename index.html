@@ -35,6 +35,8 @@
 .opp .o{white-space:nowrap}
 .opp .o.up{color:var(--red);font-weight:650}
 .opp.idle span{color:var(--muted)}
+/* 手机：内容一旦超出一屏就在主区内滚动，页脚任何情况下都不压住内容（不同手机字体宽度不同，不能只靠压间距） */
+@media(max-width:860px){main.grid{overflow-y:auto;overscroll-behavior:contain}}
 .hero .opp.mob-only{border:0;padding:2px 0 0;font-size:.9em}
 @media(max-width:860px){.hero .act:has(+ .opp.mob-only){display:none}}
 .c1 .fill .mini td small{font-family:var(--sans);font-size:.82em}
@@ -239,6 +241,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261019k"></script>
+<script type="module" src="./js/app.js?v=20261019l"></script>
 </body>
 </html>
