@@ -36,6 +36,8 @@
 .opp .o.up{color:var(--red);font-weight:650}
 .opp.idle span{color:var(--muted)}
 .xp-btn{display:none}
+.state-card{flex:none}
+@media(max-width:1180px) and (min-width:861px){.c1:has(> .state-card){grid-template-rows:auto auto auto minmax(0,1fr)}.c1>.state-card{grid-column:1;min-height:0;overflow-y:auto}.c1>.state-card~.fill{grid-column:2 !important}}
 @media(max-width:860px){.xp:not(.open) .more{display:none !important}.xp-btn{display:block;width:100%;margin:6px 0 0;padding:6px 0;border:1px solid var(--line2);border-radius:3px;background:var(--panel2);color:var(--accent);font:600 11px var(--sans);cursor:pointer}}
 /* 手机：内容一旦超出一屏就在主区内滚动，页脚任何情况下都不压住内容（不同手机字体宽度不同，不能只靠压间距） */
 @media(max-width:860px){main.grid{overflow-y:auto;overscroll-behavior:contain}}
@@ -280,6 +282,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261019n"></script>
+<script type="module" src="./js/app.js?v=20261020a"></script>
 </body>
 </html>
