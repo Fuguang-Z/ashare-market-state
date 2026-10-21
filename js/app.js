@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261021c';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021c';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021c';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021c';
+import ds, { OVERSEAS } from './datasource.js?v=20261021e';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021e';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021e';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021e';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -328,13 +328,18 @@ async function applyPremarket() {
   S.pmDay = date; S.premarket = await staticJSON('premarket.json').catch(() => null);
 }
 function premarketHTML() {
-  const p = S.premarket; if (!p || p.forDate !== S.calendar?.date) return '';
-  const cls = p.call === '偏强' ? 'up' : p.call === '偏弱' ? 'down' : 'flat';
-  const sec = (p.sectors ?? []).map(x => `${x.name}${x.view}`).join('、') || '无明确板块机会';
-  const secNote = (p.sectors ?? []).map(x => x.note).filter(Boolean).join('；');
+  const p = S.premarket; if (!p || p.forDate !== S.calendar?.date || !p.probs) return '';
+  const pc = v => `${Math.round((v ?? 0) * 100)}%`;
+  const items = [['维持', `维持${p.stage}`, 'flat'], ['进入下一阶段', p.next ? `进入${p.next}` : null, 'up'], ['回退', p.prev ? `回退${p.prev}` : null, 'down']]
+    .filter(([, label]) => label);
+  const top = items.reduce((a, b) => ((p.probs[b[0]] ?? 0) > (p.probs[a[0]] ?? 0) ? b : a));
   const bt = p.backtest ?? {}, lv = p.live ?? {};
-  const hit = isNum(bt.callHit) ? `回测表态命中 ${Math.round(bt.callHit * 100)}%（${bt.callN} 次）${lv.n ? ` · 实盘 ${lv.hit}/${lv.n}` : ''}` : '';
-  return `<div class="opp pm" title="盘前预判：隔夜外围 + 昨日复盘的历史统计，只列预期，不构成操作建议。模型参考上涨概率 ${Math.round((p.prob ?? 0) * 100)}%"><b>盘前</b><span class="o ${cls}">指数${esc(p.call)}</span><span>${esc(p.why ?? '')}</span><span class="o ${(p.sectors ?? [])[0]?.view === '相对强' ? 'up' : ''}" title="${esc(secNote)}">板块：${esc(sec)}</span>${hit ? `<span class="muted">${esc(hit)}</span>` : ''}</div>`;
+  const hit = isNum(bt.top) ? `回测最可能命中 ${pc(bt.top)}${lv.n ? ` · 实盘 ${lv.hit}/${lv.n}` : ''}` : '';
+  const tip = [`盘前阶段预判（${p.forDate}，基于 ${p.basedOn} 收盘；隔夜费城半导体 ${fmtPct(p.sox, 1)}，${p.bucket}档）`,
+    ...items.map(([k, label]) => `${label} ${pc(p.probs[k])}${p.need?.[k] ? `：${p.need[k]}` : ''}`),
+    isNum(bt.brier) ? `滚动回测 ${bt.days} 天：Brier ${bt.brier}（只按阶段 ${bt.brierBase}），阶段真变化的日子事前给到 ${pc(bt.chgP)}` : '',
+    '只列阶段转移概率与历史统计，不构成操作建议'].filter(Boolean).join('\n');
+  return `<div class="opp pm" title="${esc(tip)}"><b>盘前</b>${items.map(([k, label, cls]) => `<span class="o ${k === top[0] ? cls : ''}${k === top[0] ? ' top' : ''}">${esc(label)} ${pc(p.probs[k])}</span>`).join('')}<span>隔夜费城半导体 ${esc(fmtPct(p.sox, 1))}</span>${hit ? `<span class="muted">${esc(hit)}</span>` : ''}</div>`;
 }
 /** 读每日更新写好的外围日 K 文件并套用（页面一打开就调用，不必等第一轮轮询；文件每天只取一次） */
 async function applyOverseasFile() {
@@ -625,7 +630,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.21c';
+const APP_VERSION = '2026.10.21e';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
