@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261021e';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021e';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021e';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021e';
+import ds, { OVERSEAS } from './datasource.js?v=20261021f';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021f';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021f';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021f';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -338,8 +338,9 @@ function premarketHTML() {
   const tip = [`盘前阶段预判（${p.forDate}，基于 ${p.basedOn} 收盘；隔夜费城半导体 ${fmtPct(p.sox, 1)}，${p.bucket}档）`,
     ...items.map(([k, label]) => `${label} ${pc(p.probs[k])}${p.need?.[k] ? `：${p.need[k]}` : ''}`),
     isNum(bt.brier) ? `滚动回测 ${bt.days} 天：Brier ${bt.brier}（只按阶段 ${bt.brierBase}），阶段真变化的日子事前给到 ${pc(bt.chgP)}` : '',
+    hit,
     '只列阶段转移概率与历史统计，不构成操作建议'].filter(Boolean).join('\n');
-  return `<div class="opp pm" title="${esc(tip)}"><b>盘前</b>${items.map(([k, label, cls]) => `<span class="o ${k === top[0] ? cls : ''}${k === top[0] ? ' top' : ''}">${esc(label)} ${pc(p.probs[k])}</span>`).join('')}<span>隔夜费城半导体 ${esc(fmtPct(p.sox, 1))}</span>${hit ? `<span class="muted">${esc(hit)}</span>` : ''}</div>`;
+  return `<div class="opp pm" title="${esc(tip)}"><b>盘前</b>${items.map(([k, label, cls]) => `<span class="o ${k === top[0] ? cls : ''}${k === top[0] ? ' top' : ''}">${esc(label)} ${pc(p.probs[k])}</span>`).join('')}</div>`;   // 只显示三个概率（2026-10-21 用户：费城半导体、回测命中不在行内显示，悬停仍可看）
 }
 /** 读每日更新写好的外围日 K 文件并套用（页面一打开就调用，不必等第一轮轮询；文件每天只取一次） */
 async function applyOverseasFile() {
@@ -630,7 +631,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.21e';
+const APP_VERSION = '2026.10.21f';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
