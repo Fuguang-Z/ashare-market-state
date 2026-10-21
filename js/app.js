@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261021a';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021a';
+import ds, { OVERSEAS } from './datasource.js?v=20261021b';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021b';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021b';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021b';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -196,6 +196,7 @@ async function wideRound() {
 /* ---------------- 热门板块池 ---------------- */
 // 入池规则与 研究/历史数据/hot_boards.py 一致：概念前 20 且 ≥3%（剔除统计性伪板块）、行业前 10 且 ≥2.5%（剔除三级细分）
 const HOT_RULE = { concept: { top: 20, min: 3.0 }, industry: { top: 10, min: 2.5 } };
+const HOT_KEEP = 5;   // 近期热点保留 5 个交易日（2026-10-21 用户改，原 10）
 const HOT_EXCLUDE = ['昨日', '连板', '涨停', '跌停', '热股', '融资', '融券', '沪股通', '深股通', '标准普尔', '标普', 'MSCI', '富时', '重仓', '预增', '预盈', '预亏',
   '破净', '低价', '次新', '送转', 'ST', '注册制', '创业板综', '上证', '深证', '中证', 'HS300', '沪深300', 'AH股', 'B股', '百元', '转债', 'QFII',
   '社保', '基金', '茅指数', '宁组合', '做市', '北交所', '专精特新', '股权激励', '举牌', '高送转', '参股', '壳资源', '央企改革', '国企改革', '地方国资',
@@ -236,7 +237,9 @@ function sectorRows(j, fs, strictLast = false) {
   const one = c => { const p1 = ret(c, j); let k = 1, ok = true; for (let d = j - 4; d <= j; d++) { const r = ret(c, d); if (r === null) { ok = false; break; } k *= 1 + r; } return { p1: p1 === null ? null : p1 * 100, p5: ok ? (k - 1) * 100 : null }; };
   const hotT = {}, hotR = {};
   for (const x of hotToday()) { const s = sectorOfName(x.name); if (s) (hotT[s] ??= []).push(x.name); }
-  for (const b of S.hotPool?.boards ?? []) { const s = sectorOfName(b.name); if (s && b.lastHotDate && b.lastHotDate !== today) { const d = b.lastHotDate.slice(5); if (!hotR[s] || hotR[s] < d) hotR[s] = d; } }
+  // 近期热点：最近一次上榜后不足 HOT_KEEP 个交易日（与热门池出池规则一致；池子没按时更新时页面也照样过期）
+  const since = d => (S.result?.H?.dates ?? []).filter(x => x > d).length + (S.result?.H?.dates?.includes(today) ? 0 : 1);
+  for (const b of S.hotPool?.boards ?? []) { const s = sectorOfName(b.name); if (s && b.lastHotDate && b.lastHotDate !== today && since(b.lastHotDate) < HOT_KEEP) { const d = b.lastHotDate.slice(5); if (!hotR[s] || hotR[s] < d) hotR[s] = d; } }
   if (S.hotPool?.asOf === today) for (const b of S.hotPool.boards) if (b.lastHotDate === today) { const s = sectorOfName(b.name); if (s && !(hotT[s] ?? []).includes(b.name)) (hotT[s] ??= []).push(b.name); }
   const key = fs.k === 'fT' ? 'p1' : 'p5';
   const rows = SECTORS.map(sec => {
@@ -607,7 +610,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.21a';
+const APP_VERSION = '2026.10.21b';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
