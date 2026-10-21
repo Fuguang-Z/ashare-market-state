@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261020a';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261020a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261020a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261020a';
+import ds, { OVERSEAS } from './datasource.js?v=20261021a';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021a';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021a';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021a';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -607,7 +607,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.20a';
+const APP_VERSION = '2026.10.21a';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -869,9 +869,10 @@ function boardsHTML(f) {
     ${b.etf ? `<div class="etf" title="跟踪 ${esc(b.etf.index)}；按截至 ${esc(b.etf.asOf)} 的 20 日成交额选取">ETF：${esc(b.etf.name)}（${esc(b.etf.code)}）· ${esc(b.etf.index)}</div>` : ''}</div>`).join('');
   return `<section class="card board-card"><h3>${mb.role}<span class="cnt mid-hide">${esc(mb.note ?? '最多 2 个')}</span><span class="cnt mid-only">${mb.since ? '今日 · 主跌以来 · 5日' : '今日 · 5日'}</span></h3>${rows || '<p class="muted">无主线：未出现集体走强且与指数同步的板块</p>'}${overseasInline()}</section>`;
 }
-/** 左列下部：状态卡（主升/情绪周期 → 领涨集团；震荡/筑底 → 小仓套利；主跌无）+ 板块强弱（任何阶段都显示） */
+/** 左列下部：板块强弱（任何阶段都显示，固定在上）+ 状态卡（主升/情绪周期 → 领涨集团；震荡/筑底 → 小仓套利；主跌无）。
+ * 主跌期板块强弱占满剩余高度；有状态卡时状态卡限高，板块强弱保持固定长度，不会被挤没（2026-10-21 用户要求） */
 function extraHTML(f) {
-  return stateCardHTML(f) + sectorHTML(f);
+  return sectorHTML(f) + stateCardHTML(f);
 }
 function stateCardHTML(f) {
   if ((f.state.startsWith('大主升') || S.emo?.active) && S.today.top?.ok) {

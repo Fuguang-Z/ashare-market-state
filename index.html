@@ -36,8 +36,9 @@
 .opp .o.up{color:var(--red);font-weight:650}
 .opp.idle span{color:var(--muted)}
 .xp-btn{display:none}
-.state-card{flex:none}
-@media(max-width:1180px) and (min-width:861px){.c1:has(> .state-card){grid-template-rows:auto auto auto minmax(0,1fr)}.c1>.state-card{grid-column:1;min-height:0;overflow-y:auto}.c1>.state-card~.fill{grid-column:2 !important}}
+.state-card{flex:0 1 auto;max-height:clamp(96px,19vh,200px);min-height:clamp(58px,10vh,110px);overflow-y:auto;scrollbar-width:thin}
+.c1:has(> .state-card)>.fill{flex:1 1 0;min-height:clamp(118px,22vh,300px)}
+@media(max-width:1180px) and (min-width:861px){.c1:has(> .state-card){grid-template-rows:auto auto auto minmax(0,1fr) auto}.c1:has(> .state-card)>.fill{grid-column:1/-1 !important;min-height:0}.c1>.state-card{grid-column:1/-1;max-height:clamp(34px,6.5vh,56px);min-height:0;padding-top:5px;padding-bottom:5px}.c1>.state-card h3{display:inline;margin:0 8px 0 0}.c1>.state-card>p{display:inline;margin:0}}
 @media(max-width:860px){.xp:not(.open) .more{display:none !important}.xp-btn{display:block;width:100%;margin:6px 0 0;padding:6px 0;border:1px solid var(--line2);border-radius:3px;background:var(--panel2);color:var(--accent);font:600 11px var(--sans);cursor:pointer}}
 /* 手机：内容一旦超出一屏就在主区内滚动，页脚任何情况下都不压住内容（不同手机字体宽度不同，不能只靠压间距） */
 @media(max-width:860px){main.grid{overflow-y:auto;overscroll-behavior:contain}}
@@ -241,12 +242,13 @@
   .condition-card.desk-only,.log-card.desk-only,.fill.desk-only{display:flex !important;flex-direction:column}
   .fill.desk-only{display:block !important;padding:10px !important}
   .os-card.desk-only{display:grid !important}
+  .state-card.desk-only{display:block !important}
   .mob-only{display:none !important}
   .hero .act{display:block !important}
   .mob-extra .mini{display:table !important}
   .board-card .bd:nth-of-type(n+3){display:grid !important}
   /* 去掉一屏时代的固定高度与内部滚动 */
-  .fill,.condition-card,.log-card{min-height:0 !important;max-height:none !important;overflow:visible !important;height:auto !important}
+  .fill,.condition-card,.log-card,.state-card{min-height:0 !important;max-height:none !important;overflow:visible !important;height:auto !important}
   .tl2{display:grid !important;grid-template-columns:minmax(0,1fr) !important;height:auto !important;gap:8px}
   .log.tl{max-height:none !important;overflow:visible !important}
   .log-top,.log-top .log,.log-top .now-tag{display:flex !important}
@@ -282,6 +284,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261020a"></script>
+<script type="module" src="./js/app.js?v=20261021a"></script>
 </body>
 </html>
