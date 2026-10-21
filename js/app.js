@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261021b';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021b';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021b';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021b';
+import ds, { OVERSEAS } from './datasource.js?v=20261021c';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021c';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021c';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021c';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -322,6 +322,20 @@ async function overseasRound() {
   const dow = new Date(`${date}T12:00:00+08:00`).getUTCDay();
   if (!S.overseasQ || (dow >= 1 && dow <= 5 && hm >= '08:00' && hm <= '14:40')) { const q = await ds.getOverseasQuotes(); if (q.ok) S.overseasQ = q; }
 }
+/** 盘前预判（云端 08:30 生成 data/premarket.json）：每天读一次，只在预测日当天显示 */
+async function applyPremarket() {
+  const date = S.calendar?.date; if (!date || S.pmDay === date) return;
+  S.pmDay = date; S.premarket = await staticJSON('premarket.json').catch(() => null);
+}
+function premarketHTML() {
+  const p = S.premarket; if (!p || p.forDate !== S.calendar?.date) return '';
+  const cls = p.call === '偏强' ? 'up' : p.call === '偏弱' ? 'down' : 'flat';
+  const sec = (p.sectors ?? []).map(x => `${x.name}${x.view}`).join('、') || '无明确板块机会';
+  const secNote = (p.sectors ?? []).map(x => x.note).filter(Boolean).join('；');
+  const bt = p.backtest ?? {}, lv = p.live ?? {};
+  const hit = isNum(bt.callHit) ? `回测表态命中 ${Math.round(bt.callHit * 100)}%（${bt.callN} 次）${lv.n ? ` · 实盘 ${lv.hit}/${lv.n}` : ''}` : '';
+  return `<div class="opp pm" title="盘前预判：隔夜外围 + 昨日复盘的历史统计，只列预期，不构成操作建议。模型参考上涨概率 ${Math.round((p.prob ?? 0) * 100)}%"><b>盘前</b><span class="o ${cls}">指数${esc(p.call)}</span><span>${esc(p.why ?? '')}</span><span class="o ${(p.sectors ?? [])[0]?.view === '相对强' ? 'up' : ''}" title="${esc(secNote)}">板块：${esc(sec)}</span>${hit ? `<span class="muted">${esc(hit)}</span>` : ''}</div>`;
+}
 /** 读每日更新写好的外围日 K 文件并套用（页面一打开就调用，不必等第一轮轮询；文件每天只取一次） */
 async function applyOverseasFile() {
   const date = S.calendar?.date, hm = S.calendar?.time?.slice(0, 5); if (!date) return;
@@ -420,6 +434,7 @@ async function tick() {
   try {
     S.calendar = await ds.getTradingCalendar();
     await applyOverseasFile();   // 外围日 K 文件先套用，页面一打开就有 K 线
+    await applyPremarket();
     ds.beginRefresh();
     const needWarm = !S.seed || !S.indexDaily || S.indexDaily.date !== S.calendar.date;
     if (needWarm) {
@@ -610,7 +625,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.21b';
+const APP_VERSION = '2026.10.21c';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -983,7 +998,7 @@ function logHTML() {
   const now = `机构线 <b>${esc(segName(cur?.state ?? '—'))}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>${st ? ` · ${stopTag}<span class="stop-read">${esc(st.read)}</span>` : ''}`;
   const nowShort = now.replace(/<span class="stop-read">[\s\S]*?<\/span>/, '');
   return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span><span class="cnt now-h">${nowShort}</span></h3><div class="log-top"><ul class="log ${log.length ? 'hot' : 'idle'}">
-    ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span>${oppHTML()}</div>
+    ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span>${oppHTML()}${premarketHTML()}</div>
     <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl xp${S.xp?.idx ? ' open' : ''}">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}${k >= XP_N ? ' more' : ''}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul>${xpBtn('idx', idxSegs.length, '段')}</div>
     <div class="tlcol"><h4>情绪线</h4><ul class="log tl xp${S.xp?.emo ? ' open' : ''}">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul>${xpBtn('emo', emoSegs.length, '段')}</div></div></section>`;
 }

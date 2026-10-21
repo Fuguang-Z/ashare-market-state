@@ -34,6 +34,9 @@
 .opp>b{color:var(--ink);font-weight:700}
 .opp .o{white-space:nowrap}
 .opp .o.up{color:var(--red);font-weight:650}
+.opp .o.down{color:var(--green);font-weight:650}
+.opp.pm span{white-space:normal}
+@media(max-width:1180px) and (min-width:861px){.opp.pm>span:not(.o){display:none}.opp.pm span{white-space:nowrap}.log-top:has(.opp.pm) .opp.idle{display:none}}
 .opp.idle span{color:var(--muted)}
 .xp-btn{display:none}
 .state-card{flex:0 1 auto;max-height:clamp(96px,19vh,200px);min-height:clamp(58px,10vh,110px);overflow-y:auto;scrollbar-width:thin}
@@ -284,6 +287,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261021b"></script>
+<script type="module" src="./js/app.js?v=20261021c"></script>
 </body>
 </html>
