@@ -36,8 +36,9 @@
 .opp .o.up{color:var(--red);font-weight:650}
 .opp .o.down{color:var(--green);font-weight:650}
 .opp.pm span{white-space:normal}
-.opp.pm .o:not(.top){font-weight:400;color:var(--fg2)}
-@media(max-width:1180px) and (min-width:861px){.opp.pm>span:not(.o){display:none}.opp.pm span{white-space:nowrap}.log-top:has(.opp.pm) .opp.idle{display:none}}
+.opp.pm .o:not(.pm-max){font-weight:400;color:var(--fg2)}
+.opp.pm .pm-hit{color:var(--muted)}
+@media(max-width:1180px) and (min-width:861px){.opp.pm>span:not(.o):not(.pm-hit){display:none}.opp.pm span{white-space:nowrap}.log-top:has(.opp.pm) .opp.idle{display:none}}
 .opp.idle span{color:var(--muted)}
 .xp-btn{display:none}
 .state-card{flex:0 1 auto;max-height:clamp(96px,19vh,200px);min-height:clamp(58px,10vh,110px);overflow-y:auto;scrollbar-width:thin}
@@ -288,6 +289,6 @@
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261021f"></script>
+<script type="module" src="./js/app.js?v=20261022a"></script>
 </body>
 </html>

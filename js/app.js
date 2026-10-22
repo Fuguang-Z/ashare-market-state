@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261021f';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261021f';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261021f';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261021f';
+import ds, { OVERSEAS } from './datasource.js?v=20261022a';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261022a';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261022a';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261022a';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -324,8 +324,10 @@ async function overseasRound() {
 }
 /** 盘前预判（云端 08:30 生成 data/premarket.json）：每天读一次，只在预测日当天显示 */
 async function applyPremarket() {
-  const date = S.calendar?.date; if (!date || S.pmDay === date) return;
-  S.pmDay = date; S.premarket = await staticJSON('premarket.json').catch(() => null);
+  // 云端定时常晚到（10-22 计划 08:30、实际 09:10 才推送）：还没拿到当天的就每 5 分钟再取一次，拿到后当天不再取
+  const date = S.calendar?.date; if (!date || S.premarket?.forDate === date) return;
+  if (Date.now() - (S.pmTry ?? 0) < 5 * 60000) return;
+  S.pmTry = Date.now(); S.premarket = await staticJSON('premarket.json').catch(() => S.premarket ?? null);
 }
 function premarketHTML() {
   const p = S.premarket; if (!p || p.forDate !== S.calendar?.date || !p.probs) return '';
@@ -340,7 +342,7 @@ function premarketHTML() {
     isNum(bt.brier) ? `滚动回测 ${bt.days} 天：Brier ${bt.brier}（只按阶段 ${bt.brierBase}），阶段真变化的日子事前给到 ${pc(bt.chgP)}` : '',
     hit,
     '只列阶段转移概率与历史统计，不构成操作建议'].filter(Boolean).join('\n');
-  return `<div class="opp pm" title="${esc(tip)}"><b>盘前</b>${items.map(([k, label, cls]) => `<span class="o ${k === top[0] ? cls : ''}${k === top[0] ? ' top' : ''}">${esc(label)} ${pc(p.probs[k])}</span>`).join('')}</div>`;   // 只显示三个概率（2026-10-21 用户：费城半导体、回测命中不在行内显示，悬停仍可看）
+  return `<div class="opp pm" title="${esc(tip)}"><b>盘前</b>${items.map(([k, label, cls]) => `<span class="o ${k === top[0] ? `${cls} pm-max` : ''}">${esc(label)} ${pc(p.probs[k])}</span>`).join('')}${isNum(bt.top) ? `<span class="pm-hit">（回测命中 ${pc(bt.top)}${lv.n ? ` · 实盘 ${lv.hit}/${lv.n}` : ''}）</span>` : ''}</div>`;   // 只显示三个概率（2026-10-21 用户：费城半导体、回测命中不在行内显示，悬停仍可看）
 }
 /** 读每日更新写好的外围日 K 文件并套用（页面一打开就调用，不必等第一轮轮询；文件每天只取一次） */
 async function applyOverseasFile() {
@@ -439,6 +441,9 @@ async function tick() {
   S.busy = true;
   try {
     S.calendar = await ds.getTradingCalendar();
+    // 页面跨日一直开着：换日后整页重载，重新取种子、盘前预判等当日文件，避免沿用前一天的状态
+    S.bootDate ??= S.calendar?.date;
+    if (S.calendar?.date && S.calendar.date !== S.bootDate) { location.reload(); return; }
     await applyOverseasFile();   // 外围日 K 文件先套用，页面一打开就有 K 线
     await applyPremarket();
     ds.beginRefresh();
@@ -492,7 +497,8 @@ function evaluate() {
   const out = replay(H, PARAMS);
   const confirmedRows = todayAppended ? out.rows.slice(0, -1) : out.rows;
   const since = sinceDate(out.rows);
-  S.result = { ...out, todayAppended, H, yesterday: confirmedRows.at(-1), stateSince: since, stateDays: since ? out.rows.filter(r => r.date >= since).length : null };
+  S.result = { ...out, todayAppended, H, yesterday: confirmedRows.at(-1), stateSince: since, stateDays: since ? out.rows.filter(r => r.date >= since).length : null,
+    declineSince: declineCycleStart(out.rows) };
   try { evaluateEmotion(H, out.rows); } catch (e) { S.emo = { error: String(e.message ?? e) }; }
   maybeAlert();
   maybeEmoAlert();
@@ -631,7 +637,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.21f';
+const APP_VERSION = '2026.10.22a';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -658,10 +664,22 @@ function emoRead() {
   const h = a.main.chain.at(-1), c = a.comp?.chain.at(-1);
   return `龙头 ${a.leader.name} · ${e.phase}${h.code !== a.leader.code ? `（高标 ${h.name}）` : ''}${c ? ` · 伴生 ${c.name}` : ''}`;
 }
+/** 下跌周期起点（2026-10-22 用户规则）：主跌 → 筑底/震荡 → 主跌，中间没有出现反弹（指数站上 5、10 日线且 5 日线上拐）或大主升，
+ * 仍算同一下跌周期，领跌板块与「主跌以来」都从最早那段主跌的起点算。与 研究/回测/build_timeline.py 同口径。 */
+function declineCycleStart(rows) {
+  const last = rows.at(-1); if (!last || last.state !== '主跌') return null;
+  let start = null;
+  for (let k = rows.length - 1; k >= 0; k--) {
+    const r = rows[k];
+    if (r.state.startsWith('大主升') || ((r.state === '筑底' || r.state === '震荡') && r.A1 === true)) break;
+    if (r.state === '主跌') start = r.date;
+  }
+  return start;
+}
 /** 主跌领跌板块是否止跌：当前主跌段（或 30 个交易日内最近一段主跌）区间跌幅最大的板块，站上 5 日线且近 3 日未创主跌以来新低。仅参考，不参与判定 */
 function leaderStop() {
   const r = S.result, H = r?.H; if (!H) return null;
-  let start = r.final?.state === '主跌' ? r.stateSince : null;
+  let start = r.final?.state === '主跌' ? (r.declineSince ?? r.stateSince) : null;
   if (!start) {
     const segs = indexSegs(), last = [...segs].reverse().find(g => g.state === '主跌');
     if (last && H.dates.length - 1 - H.dates.indexOf(last.end) <= 30) start = last.start;
@@ -766,9 +784,11 @@ function declineLeaders(since, n = 3) {
 function mainBoards(f) {
   if (f.state.startsWith('大主升') || (f.collective === true && f.state !== '主跌'))
     return { role: '主流板块', rows: boardStats(f.leadShown).sort((a, b) => (b.p5 ?? -99) - (a.p5 ?? -99)).slice(0, 2).map(x => ({ ...x, etf: etfFor(x.code) })) };
-  if (f.state === '主跌' && S.result.stateSince) {
-    const rows = declineLeaders(S.result.stateSince);
-    if (rows) return { role: '领跌板块', note: `自 ${S.result.stateSince.slice(5)} 主跌以来 · 最多 3 个`, since: true, rows };
+  const ds = S.result.declineSince ?? S.result.stateSince;
+  if (f.state === '主跌' && ds) {
+    const rows = declineLeaders(ds);
+    const same = ds !== S.result.stateSince ? '（中间未反弹，同一下跌周期）' : '';
+    if (rows) return { role: '领跌板块', note: `自 ${ds.slice(5)} 主跌以来${same} · 最多 3 个`, since: true, rows };
   }
   if (f.state === '主跌' || f.mainFall === true)
     return { role: '领跌板块', note: '近 5 日最弱板块 · 最多 3 个', rows: boardStats(f.weak).sort((a, b) => (a.p5 ?? 99) - (b.p5 ?? 99)).slice(0, 3) };
@@ -973,7 +993,7 @@ function indexSegs() {
   }
   const cur = segs.at(-1);
   if (cur?.state === '主跌') {   // 当前主跌段：用最新行情按主跌起点至今的区间跌幅重算领跌（与领跌板块卡片同口径）
-    const lead = declineLeaders(cur.start, 1)?.[0];
+    const lead = declineLeaders(S.result.declineSince ?? cur.start, 1)?.[0];
     if (lead) Object.assign(cur, { board: labelBoard(lead.name, lead.fam), boardMove: lead.pS });
   }
   return segs;
