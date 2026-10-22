@@ -162,11 +162,11 @@ export function features(H, FI, i, P = PARAMS) {
 }
 
 /**
- * 提醒时段：10:30 前只观察；10:30–14:40 预警；14:40–15:00 确认；午休、盘前、收盘后、休市不提醒。
+ * 提醒时段：开盘（09:30）起预警（2026-10-22 用户要求，原 10:30 前只观察）；14:40–15:00 确认；午休、盘前、收盘后、休市不提醒。
  * @param {string} hhmm 北京时间 HH:MM；@param {boolean} tradingDay
  */
 export function alertLevelAt(hhmm, tradingDay) {
-  if (!tradingDay || hhmm < '10:30' || (hhmm >= '11:30' && hhmm < '13:00') || hhmm >= '15:00') return null;
+  if (!tradingDay || hhmm < '09:30' || (hhmm >= '11:30' && hhmm < '13:00') || hhmm >= '15:00') return null;
   return hhmm < '14:40' ? '预警' : '确认';
 }
 /** 是否应发出提醒：当日试算行有状态切换、处于提醒时段、且同一 日期|事件|新状态|级别 未发过。返回去重键或 null。 */

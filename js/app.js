@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261022a';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261022a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261022a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261022a';
+import ds, { OVERSEAS } from './datasource.js?v=20261022b';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261022b';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261022b';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261022b';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -570,7 +570,6 @@ function phaseInfo() {
   const t = c.time.slice(0, 5);
   if (!c.isTradingDay) return { label: '休市', alertLevel: null };
   if (t < '09:30') return { label: '盘前', alertLevel: null };
-  if (t < '10:30') return { label: '观察期（10:30 后开始预警）', alertLevel: null };
   if (t >= '11:30' && t < '13:00') return { label: '午间休市', alertLevel: null };
   if (t >= '15:00') return { label: '收盘 · 定格', alertLevel: null };
   const level = alertLevelAt(t, c.isTradingDay);
@@ -637,7 +636,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.22a';
+const APP_VERSION = '2026.10.22b';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -844,7 +843,7 @@ function heroHTML(f) {
     </div>
     <div class="steps" title="二次探底进度">${steps}</div>
     <div class="steps-lab">${F1_STEPS.map(s => `<span>${s}</span>`).join('')}</div>
-    ${r.todayAppended && f.event ? `<div class="tent">今日试算：${esc(f.event)}（昨日确认：${esc(STAGE_META[y?.state]?.name ?? '—')}）${phaseInfo().alertLevel ? '' : '，10:30 前只观察'}</div>`
+    ${r.todayAppended && f.event ? `<div class="tent">今日试算：${esc(f.event)}（昨日确认：${esc(STAGE_META[y?.state]?.name ?? '—')}）${phaseInfo().alertLevel ? '' : '，非提醒时段'}</div>`
       : lastAlert ? `<div class="tent">最近提醒 ${esc(new Date(lastAlert.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}：${esc(lastAlert.event)}</div>` : ''}
   </section>`;
 }
@@ -1077,7 +1076,7 @@ function footHTML() {
     <span>实时 <b class="num">${q?.ok ? esc(q.rows[0]?.sourceTime?.slice(11, 16) ?? '—') : '—'}</b></span>
     <span>页面更新 <b class="num">${S.lastTickAt ? S.lastTickAt.toLocaleTimeString('zh-CN', { hour12: false }) : '—'}</b></span>
     <span class="mob-only">板块 ${tb}/${ALL_BOARDS.length}${tv?.estimated ? ` · 预估 ${fmtYi(tv.projectedFullDay)}` : ''}${S.lastError ? ' · <span class="r">数据源异常</span>' : ''}</span>
-    <span class="disc" title="本页面按预先设定的规则，对公开行情数据做自动判定。盘中结论为试算，10:30 后状态切换发出预警，14:40 后仍成立发出确认，收盘后定格。数据缺失时显示「?」，不会因此判为震荡或发出提醒。个股只列客观数据，仓位只显示规则档位，不构成投资建议，不提供下单。成交额口径：上证指数 + 深证成指。">规则自动判定，盘中为试算 · 数据缺失显示「?」不触发提醒 · 不构成投资建议，不提供下单</span>`;
+    <span class="disc" title="本页面按预先设定的规则，对公开行情数据做自动判定。盘中结论为试算，开盘起状态切换即发出预警，14:40 后仍成立发出确认，收盘后定格。数据缺失时显示「?」，不会因此判为震荡或发出提醒。个股只列客观数据，仓位只显示规则档位，不构成投资建议，不提供下单。成交额口径：上证指数 + 深证成指。">规则自动判定，盘中为试算 · 数据缺失显示「?」不触发提醒 · 不构成投资建议，不提供下单</span>`;
 }
 
 function render() {
