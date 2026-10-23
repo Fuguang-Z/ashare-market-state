@@ -3,7 +3,7 @@
  * 脉络：指数止跌 → 龙头主升、打开高度 → 龙头震荡，补涨开启 → 高标依次见顶、新高标接力 → 龙头反抽双顶 → 情绪退潮。
  * 主线之外可有一条伴生线，随主线周期一起结束。
  */
-import { GENERIC_THEME } from './engine.js?v=20261022b';
+import { GENERIC_THEME } from './engine.js?v=20261023a';
 
 export const CYCLE_PARAMS = Object.freeze({
   PANIC_DOWN: 30, SHAKE_AMP: 12.0, SHAKE_FROM_HIGH: 2.0, DROP: -5.0, STALL: 3.0, WIN: 3, STRENGTH: 6, STRENGTH_RES: 5, RES_LOOK: 5, HOLD: 3,
