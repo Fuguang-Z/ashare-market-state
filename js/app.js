@@ -2,10 +2,10 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261023a';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261023a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261023a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261023a';
+import ds, { OVERSEAS } from './datasource.js?v=20261027a';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261027a';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261027a';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261027a';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -642,7 +642,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.23a';
+const APP_VERSION = '2026.10.27a';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -1098,6 +1098,8 @@ function render() {
   $('#col1').innerHTML = heroHTML(f) + boardsHTML(f) + overseasHTML() + mobileConds(groups) + extraHTML(f);
   $('#col2').innerHTML = logHTML() + groupCard(G.res) + groupCard(G.down) + `<div class="merge">${groupCard(G.emo)}${groupCard(G.risk)}${groupCard(G.ref)}</div>`;
   $('#col3').innerHTML = groupCard(G.emo) + groupCard(G.risk) + groupCard(G.ref);
+  // 天枢主题：首次出数时卡片入场动画只播一次（轮询重绘不重播）
+  if (!document.body.dataset.entered) { document.body.dataset.entered = '1'; document.body.classList.add('ts-enter'); setTimeout(() => document.body.classList.remove('ts-enter'), 900); }
   const alertsOn = load('alertsOn', false);
   $('#alert-btn').textContent = alertsOn ? '提醒已开启' : '开启网页提醒';
   $('#alert-btn').setAttribute('aria-pressed', String(alertsOn));
