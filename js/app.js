@@ -2,11 +2,11 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261028a';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028a';
-import { suggestPosition, RULE_TEXT } from './position.js?v=20261028a';
+import ds, { OVERSEAS } from './datasource.js?v=20261028b';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028b';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028b';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028b';
+import { suggestPosition, RULE_TEXT } from './position.js?v=20261028b';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -415,6 +415,19 @@ async function warmup() {
   if (!S.hotPool) S.hotPool = await staticJSON('hot_boards.json').catch(() => null);
   if (!S.etfMap) S.etfMap = await staticJSON('board_etf_map.json').catch(() => null);
   if (!S.sourceMap) S.sourceMap = await staticJSON('board_source_map.json').catch(() => null);
+  if (!S.seedPools) { S.seedPools = decodePools(S.seed.limitPools); S.seedK = decodeKline(S.seed.cycleKline, S.seed.dates); }
+  if (!S.extra) S.extra = load('extra', { boards: {}, limits: {} });
+  if (!S.extra.pools) S.extra.pools = {};
+  if (!S.boardK) S.boardK = load('boardK', null);
+  if (!S.overseas) S.overseas = load('overseasK', null);
+  // 首屏提速（2026-10-28）：日 K 与实时行情要等东财超时、腾讯 3 秒间隔，约 20 多秒；先用种子（截至上一交易日收盘）出一版判定，
+  // 标「实时数据载入中」，不发提醒，取到日 K 和行情后照常重新判定。
+  if (!S.result) {
+    S.preview = true;
+    try { evaluate(); } catch (e) { S.result = null; }
+    S.preview = false;
+    render();
+  }
   if (!S.indexDaily || S.indexDaily.date !== S.calendar.date) {
     const d = { date: S.calendar.date };
     for (const symbol of ['sh000001', 'sz399001', 'sh000985']) {
@@ -424,17 +437,12 @@ async function warmup() {
     }
     S.indexDaily = d;
   }
-  if (!S.seedPools) { S.seedPools = decodePools(S.seed.limitPools); S.seedK = decodeKline(S.seed.cycleKline, S.seed.dates); }
-  if (!S.extra) S.extra = load('extra', { boards: {}, limits: {} });
-  if (!S.extra.pools) S.extra.pools = {};
-  if (!S.boardK) S.boardK = load('boardK', null);
-  if (!S.overseas) S.overseas = load('overseasK', null);
   updateBackfill();
 }
 
 /** 快速轮：盘中只刷新腾讯指数报价与成交额，随即重新判定并渲染（主轮在等同花顺等慢请求时照样运行，判定与渲染是同步的，不会交错） */
 async function quickTick() {
-  if (S.quickBusy || !S.calendar?.refreshRecommended || !S.result) return;
+  if (S.quickBusy || !S.calendar?.refreshRecommended || !S.result || S.result.preview) return;
   S.quickBusy = true;
   try {
     const q = await ds.getIndexQuotes(); if (q.ok) S.today.quotes = q;
@@ -505,8 +513,9 @@ function evaluate() {
   const confirmedRows = todayAppended ? out.rows.slice(0, -1) : out.rows;
   const since = sinceDate(out.rows);
   S.result = { ...out, todayAppended, H, yesterday: confirmedRows.at(-1), stateSince: since, stateDays: since ? out.rows.filter(r => r.date >= since).length : null,
-    declineSince: declineCycleStart(out.rows) };
+    declineSince: declineCycleStart(out.rows), preview: !!S.preview };
   try { evaluateEmotion(H, out.rows); } catch (e) { S.emo = { error: String(e.message ?? e) }; }
+  if (S.preview) return;   // 首屏预览只用种子，不发提醒
   maybeAlert();
   maybeEmoAlert();
 }
@@ -643,7 +652,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.28a';
+const APP_VERSION = '2026.10.28b';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -840,7 +849,7 @@ function heroHTML(f) {
   return `<section class="card hero ${meta.cls}">
     <div class="hero-heading"><i class="state-dot" aria-hidden="true"></i>指数线（机构）<span class="eyebrow">MARKET STATE</span></div>
     <div class="hero-top"><div class="stage">${esc(meta.name)}</div><div class="position-block"><span class="position-label">指数仓位</span><span class="pos">${esc(POSITION[f.state] ?? '—')}</span></div></div>
-    <p class="sub">${esc(meta.sub)}${r.stateSince ? ` · <span>自 ${esc(r.stateSince)} 起 ${days}</span>` : ''}</p>
+    <p class="sub">${esc(meta.sub)}${r.stateSince ? ` · <span>自 ${esc(r.stateSince)} 起 ${days}</span>` : ''}${r.preview ? ` · <span class="pv">${esc((y?.date ?? '').slice(5))} 收盘判定，实时数据载入中…</span>` : ''}</p>
     <div class="act">${esc(pref ? '主线为偏好不参与的板块（外围驱动）：按规则观望' : ACTION[f.state])}${posSugHTML(f, pref)}</div>${oppHTML('mob-only')}
     <div class="kpis">
       ${kpi('上证指数', isNum(f.close) ? `${f.close.toFixed(2)} <small class="${sign(f.p1)}">${fmtPct(f.p1)}</small>` : '—', '')}
