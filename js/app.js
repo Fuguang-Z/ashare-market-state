@@ -2,11 +2,11 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261028c';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028c';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028c';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028c';
-import { suggestPosition, RULE_TEXT } from './position.js?v=20261028c';
+import ds, { OVERSEAS } from './datasource.js?v=20261028d';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028d';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028d';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028d';
+import { suggestPosition, RULE_TEXT } from './position.js?v=20261028d';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -34,6 +34,9 @@ function load(key, fallback) { try { return JSON.parse(localStorage.getItem(`${S
 function save(key, value) { try { localStorage.setItem(`${STORE}.${key}`, JSON.stringify(value)); } catch { /* 存储不可用时只影响提醒去重 */ } }
 
 async function staticJSON(name) {
+  // index.html 头部已并行预取首屏要用的几个文件（window.__pre），第一次直接复用；预取失败就照常再取
+  const pre = window.__pre?.[name];
+  if (pre) { delete window.__pre[name]; try { return await pre; } catch (_) { /* 预取失败，下面重取 */ } }
   const res = await fetch(new URL(`../data/${name}`, import.meta.url), { credentials: 'omit', cache: 'no-cache' });
   if (!res.ok) throw new Error(`${name} HTTP ${res.status}`);
   return res.json();
@@ -653,7 +656,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.28c';
+const APP_VERSION = '2026.10.28d';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },

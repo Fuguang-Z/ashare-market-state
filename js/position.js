@@ -5,8 +5,8 @@
  * 实际仓位不超过建议 + 5 个百分点为 √，否则为 ×（低于建议也算 √，控制风险优先）。
  * 本模块同时供本站首卡与天枢「年度计划」逐日表使用（天枢跨站 import），改档位只改这里。只给档位比例，不构成投资建议。
  */
-import { PREFERENCE_EXCLUDED } from './engine.js?v=20261028c';
-import { labelBoard } from './cycle.js?v=20261028c';
+import { PREFERENCE_EXCLUDED } from './engine.js?v=20261028d';
+import { labelBoard } from './cycle.js?v=20261028d';
 
 export const INDEX_PCT = Object.freeze({ '大主升': 80, '大主升-减仓': 50, '震荡': 10, '筑底': 0, '主跌': 0 });
 export const EMO_PCT = 50;
