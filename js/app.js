@@ -2,11 +2,11 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261028b';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028b';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028b';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028b';
-import { suggestPosition, RULE_TEXT } from './position.js?v=20261028b';
+import ds, { OVERSEAS } from './datasource.js?v=20261028c';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028c';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028c';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028c';
+import { suggestPosition, RULE_TEXT } from './position.js?v=20261028c';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -412,9 +412,6 @@ function updateBackfill() {
 async function warmup() {
   if (!S.seed) S.seed = await staticJSON('market_seed.json');
   if (!S.timeline) S.timeline = await staticJSON('regime_timeline.json').catch(() => null);
-  if (!S.hotPool) S.hotPool = await staticJSON('hot_boards.json').catch(() => null);
-  if (!S.etfMap) S.etfMap = await staticJSON('board_etf_map.json').catch(() => null);
-  if (!S.sourceMap) S.sourceMap = await staticJSON('board_source_map.json').catch(() => null);
   if (!S.seedPools) { S.seedPools = decodePools(S.seed.limitPools); S.seedK = decodeKline(S.seed.cycleKline, S.seed.dates); }
   if (!S.extra) S.extra = load('extra', { boards: {}, limits: {} });
   if (!S.extra.pools) S.extra.pools = {};
@@ -428,6 +425,10 @@ async function warmup() {
     S.preview = false;
     render();
   }
+  // 热门池、ETF 对照（约 1.5MB）、板块来源表放到首屏之后再取（取不到时页面本就按缺失处理）
+  if (!S.hotPool) S.hotPool = await staticJSON('hot_boards.json').catch(() => null);
+  if (!S.etfMap) S.etfMap = await staticJSON('board_etf_map.json').catch(() => null);
+  if (!S.sourceMap) S.sourceMap = await staticJSON('board_source_map.json').catch(() => null);
   if (!S.indexDaily || S.indexDaily.date !== S.calendar.date) {
     const d = { date: S.calendar.date };
     for (const symbol of ['sh000001', 'sz399001', 'sh000985']) {
@@ -652,7 +653,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.28b';
+const APP_VERSION = '2026.10.28c';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
