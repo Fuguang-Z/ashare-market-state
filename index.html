@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b0f17">
+<meta name="theme-color" content="#ffffff">
+<script>/* 天枢内嵌（?embed=tianshu，或被嵌进其他页面）用天枢深色主题；独立打开用白底（2026-10-28 用户定） */
+try{if(/[?&]embed=tianshu(&|$)/.test(location.search)||window.self!==window.top){document.documentElement.classList.add('ts');document.querySelector('meta[name=theme-color]').content='#0b0f17'}}catch(e){document.documentElement.classList.add('ts')}</script>
 <title>A股市场状态</title>
 <meta name="description" content="按设定条件实时判定 A 股处于主升、震荡还是主跌，并在状态切换时网页内提醒。">
 <style>
@@ -275,41 +277,45 @@
   .os-card{grid-template-columns:minmax(0,1fr) !important;row-gap:4px}
 }
 
-/* ── 天枢主题（2026-10-27 D53）：配色与动画与天枢一致，红涨绿跌不变；只覆盖颜色，不动布局 ── */
-:root{color-scheme:dark;--bg:#0b0f17;--panel:#141c2b;--panel2:#111827;--line:#243046;--line2:#2f3d57;--ink:#e6ebf5;--fg:#cfd7e6;--fg2:#a6b1c6;--muted:#8a96ad;--navy:#4f8cff;--accent:#38bdf8;--red:#f05261;--red-d:#2b161c;--green:#2fbf71;--green-d:#10261b;--amber:#f59e0b;--amber-d:#2a1f0c;--violet:#a78bfa;--violet-d:#1f1a35;--steel:#8aa0bd;--steel-d:#162133}
-body{background:radial-gradient(1200px 600px at 50% -10%,#14203a 0%,var(--bg) 60%) fixed,var(--bg)}
-.card{border-radius:10px;box-shadow:none}
-.hero{background:linear-gradient(112deg,var(--tint),var(--panel) 72%);box-shadow:0 0 0 1px color-mix(in srgb,var(--tone) 10%,transparent),0 0 32px color-mix(in srgb,var(--tone) 12%,transparent)}
-.top{border-bottom-color:var(--line2)}
-.logo{background:linear-gradient(135deg,#4f8cff,#38bdf8);color:#fff;border-radius:8px}
-.chip.warn{border-color:color-mix(in srgb,var(--amber) 40%,transparent)}.chip.err{border-color:color-mix(in srgb,var(--red) 40%,transparent)}
-.live{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
-#alert-btn{background:transparent;border-radius:8px}#alert-btn:hover,#alert-btn[aria-pressed="true"]{color:#fff}
-.ic.y{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
-.mgroup .ci.y{background:color-mix(in srgb,var(--accent) 12%,var(--panel));border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
-.mgroup .ci.u{border-color:color-mix(in srgb,var(--amber) 40%,transparent)}
-.conn{border-radius:8px}
-.conn.ok{color:#22c55e;background:#0f2a1c}.conn.lag{color:#f59e0b;background:#2a1f0c}.conn.bad{color:#ef4444;background:#2b1418}.conn.off{color:var(--muted);background:var(--panel2)}
-#toast{background:var(--panel) !important;color:var(--ink);box-shadow:0 12px 40px #00000080 !important}
-#toast button{background:var(--navy);border-color:var(--navy)}
-.emo-line .emo-pos{background:var(--panel)}
-.kspark .live rect{fill:var(--panel)}
-.tent{border-left-color:var(--amber)}
+/* ── 天枢主题（2026-10-27 D53；10-28 起只在天枢内嵌时生效，html.ts）：配色与动画与天枢一致，红涨绿跌不变；只覆盖颜色，不动布局。独立打开为白底 ── */
+html.ts{color-scheme:dark;--bg:#0b0f17;--panel:#141c2b;--panel2:#111827;--line:#243046;--line2:#2f3d57;--ink:#e6ebf5;--fg:#cfd7e6;--fg2:#a6b1c6;--muted:#8a96ad;--navy:#4f8cff;--accent:#38bdf8;--red:#f05261;--red-d:#2b161c;--green:#2fbf71;--green-d:#10261b;--amber:#f59e0b;--amber-d:#2a1f0c;--violet:#a78bfa;--violet-d:#1f1a35;--steel:#8aa0bd;--steel-d:#162133}
+html.ts body{background:radial-gradient(1200px 600px at 50% -10%,#14203a 0%,var(--bg) 60%) fixed,var(--bg)}
+html.ts .card{border-radius:10px;box-shadow:none}
+html.ts .hero{background:linear-gradient(112deg,var(--tint),var(--panel) 72%);box-shadow:0 0 0 1px color-mix(in srgb,var(--tone) 10%,transparent),0 0 32px color-mix(in srgb,var(--tone) 12%,transparent)}
+html.ts .top{border-bottom-color:var(--line2)}
+html.ts .logo{background:linear-gradient(135deg,#4f8cff,#38bdf8);color:#fff;border-radius:8px}
+html.ts .chip.warn{border-color:color-mix(in srgb,var(--amber) 40%,transparent)}html.ts .chip.err{border-color:color-mix(in srgb,var(--red) 40%,transparent)}
+html.ts .live{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+html.ts #alert-btn{background:transparent;border-radius:8px}html.ts #alert-btn:hover,html.ts #alert-btn[aria-pressed="true"]{color:#fff}
+html.ts .ic.y{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
+html.ts .mgroup .ci.y{background:color-mix(in srgb,var(--accent) 12%,var(--panel));border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+html.ts .mgroup .ci.u{border-color:color-mix(in srgb,var(--amber) 40%,transparent)}
+html.ts .conn{border-radius:8px}
+html.ts .conn.ok{color:#22c55e;background:#0f2a1c}html.ts .conn.lag{color:#f59e0b;background:#2a1f0c}html.ts .conn.bad{color:#ef4444;background:#2b1418}html.ts .conn.off{color:var(--muted);background:var(--panel2)}
+html.ts #toast{background:var(--panel) !important;color:var(--ink);box-shadow:0 12px 40px #00000080 !important}
+html.ts #toast button{background:var(--navy);border-color:var(--navy)}
+html.ts .emo-line .emo-pos{background:var(--panel)}
+html.ts .kspark .live rect{fill:var(--panel)}
+html.ts .tent{border-left-color:var(--amber)}
 @keyframes hotpulse{0%,100%{box-shadow:0 0 0 0 #f59e0b00}50%{box-shadow:0 0 0 3px #f59e0b55}}
 /* 动画：与天枢相同的卡片入场（上移 + 提亮）、状态点呼吸；入场只在首次出数时播一次，轮询重绘不重播 */
 @keyframes ts-card-in{from{transform:translateY(12px);filter:brightness(1.5);opacity:0}}
 @keyframes ts-breathe{50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--tone) 0%,transparent),0 0 10px 1px color-mix(in srgb,var(--tone) 70%,transparent)}}
 @keyframes ts-hero-glow{50%{box-shadow:0 0 0 3px color-mix(in srgb,var(--tone) 14%,transparent),0 0 46px color-mix(in srgb,var(--tone) 26%,transparent)}}
-body.ts-enter .card{animation:ts-card-in .5s ease both}
-body.ts-enter .card:nth-child(2){animation-delay:.06s}body.ts-enter .card:nth-child(3){animation-delay:.12s}body.ts-enter .card:nth-child(4){animation-delay:.18s}body.ts-enter .card:nth-child(n+5){animation-delay:.24s}
-body.ts-enter .c2 .card{animation-delay:.1s}body.ts-enter .c3 .card{animation-delay:.2s}
-.hero .state-dot{border-radius:50%;animation:ts-breathe 2.4s ease-in-out infinite}
-body:not(.ts-enter) .hero{animation:ts-hero-glow 3.2s ease-in-out infinite}
+html.ts body.ts-enter .card{animation:ts-card-in .5s ease both}
+html.ts body.ts-enter .card:nth-child(2){animation-delay:.06s}html.ts body.ts-enter .card:nth-child(3){animation-delay:.12s}html.ts body.ts-enter .card:nth-child(4){animation-delay:.18s}html.ts body.ts-enter .card:nth-child(n+5){animation-delay:.24s}
+html.ts body.ts-enter .c2 .card{animation-delay:.1s}html.ts body.ts-enter .c3 .card{animation-delay:.2s}
+html.ts .hero .state-dot{border-radius:50%;animation:ts-breathe 2.4s ease-in-out infinite}
+html.ts body:not(.ts-enter) .hero{animation:ts-hero-glow 3.2s ease-in-out infinite}
 /* 亮色实底小标签（止跌 / 未止跌、提醒级别）在深色下用深色字，保证可读 */
-.stop-tag,.board-card .stop-line b{color:#0b0f17;font-weight:700}.log.hot li .lv{color:#0b0f17 !important}
-.kspark.empty,.mini th .sort.off .ar{color:#56678a}
+html.ts .stop-tag,html.ts .board-card .stop-line b{color:#0b0f17;font-weight:700}html.ts .log.hot li .lv{color:#0b0f17 !important}
+html.ts .kspark.empty,html.ts .mini th .sort.off .ar{color:#56678a}
 /* 手机：卡片标题不被右侧长说明挤成竖排；放不下时说明整体换到下一行 */
 @media(max-width:860px){.card h3{flex-wrap:wrap;white-space:nowrap;row-gap:2px}.card h3 .cnt{white-space:normal;min-width:0}}
+/* 仓位建议（2026-10-28）：首卡「按规则」一行末尾，颜色随阶段 */
+.pos-sug{display:inline-block;margin-left:10px;padding:1px 8px;border:1px solid currentColor;border-radius:3px;color:var(--tone);font-weight:650;white-space:nowrap;cursor:help}.pos-sug b{font-family:var(--mono);letter-spacing:-.02em}
+.opp .pos-sug{margin-left:auto}
+html.ts .pos-sug{border-radius:6px;background:color-mix(in srgb,var(--tone) 10%,transparent)}
 </style>
 </head>
 <body>
@@ -325,6 +331,6 @@ body:not(.ts-enter) .hero{animation:ts-hero-glow 3.2s ease-in-out infinite}
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261027a"></script>
+<script type="module" src="./js/app.js?v=20261028a"></script>
 </body>
 </html>

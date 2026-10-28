@@ -2,10 +2,11 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261027a';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261027a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261027a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261027a';
+import ds, { OVERSEAS } from './datasource.js?v=20261028a';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028a';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028a';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028a';
+import { suggestPosition, RULE_TEXT } from './position.js?v=20261028a';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -642,7 +643,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.27a';
+const APP_VERSION = '2026.10.28a';
 const STAGE_META = {
   '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
   '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
@@ -840,7 +841,7 @@ function heroHTML(f) {
     <div class="hero-heading"><i class="state-dot" aria-hidden="true"></i>指数线（机构）<span class="eyebrow">MARKET STATE</span></div>
     <div class="hero-top"><div class="stage">${esc(meta.name)}</div><div class="position-block"><span class="position-label">指数仓位</span><span class="pos">${esc(POSITION[f.state] ?? '—')}</span></div></div>
     <p class="sub">${esc(meta.sub)}${r.stateSince ? ` · <span>自 ${esc(r.stateSince)} 起 ${days}</span>` : ''}</p>
-    <div class="act">${esc(pref ? '主线为偏好不参与的板块（外围驱动）：按规则观望' : ACTION[f.state])}</div>${oppHTML('mob-only')}
+    <div class="act">${esc(pref ? '主线为偏好不参与的板块（外围驱动）：按规则观望' : ACTION[f.state])}${posSugHTML(f, pref)}</div>${oppHTML('mob-only')}
     <div class="kpis">
       ${kpi('上证指数', isNum(f.close) ? `${f.close.toFixed(2)} <small class="${sign(f.p1)}">${fmtPct(f.p1)}</small>` : '—', '')}
       ${kpi(r.todayAppended && S.today.amtSource ? `全天量能（${S.today.amtSource.replace('全天', '')}）` : '成交额', isNum(f.amt) ? `${fmtYi(f.amt).replace(' ', '')} <small>×${isNum(f.vr) ? f.vr.toFixed(2) : '—'}</small>` : '—', '',
@@ -1034,6 +1035,15 @@ function logHTML() {
     <div class="tlcol"><h4>情绪线</h4><ul class="log tl xp${S.xp?.emo ? ' open' : ''}">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul>${xpBtn('emo', emoSegs.length, '段')}</div></div></section>`;
 }
 
+/** 仓位建议（position.js）：指数线档位 + 情绪主升半仓，合计不超过 100%；悬停看构成与规则 */
+function posSugHTML(f, pref) {
+  const a = S.emo?.active;
+  const emoOn = S.emo?.position === '半仓' && !!a && !a.voided && !labelBoard(a.leader.board ?? '').startsWith('资源');
+  const s = suggestPosition(f.state, { indexPref: pref, emoOn });
+  if (s.pct === null) return '';
+  const tip = `指数线 ${segName(f.state)}${pref ? '（偏好不参与）' : ''} ${s.index}% + 情绪线 ${emoOn ? '情绪主升' : '无'} ${s.emo}% = ${s.pct}%。${RULE_TEXT}只给仓位比例，不构成投资建议。`;
+  return `<span class="pos-sug" title="${esc(tip)}">仓位建议 <b>${s.pct}%</b></span>`;
+}
 /** 机会提示（小框）：主跌期不提示；震荡 / 筑底 / 主升期出现机构（共振爆发 → 大主升）或情绪（情绪主升）机会时列出仓位档位。只列档位，不写买卖。 */
 function oppHTML(extra = '') {
   const f = S.result?.final, st = f?.state;
@@ -1053,7 +1063,8 @@ function oppHTML(extra = '') {
     else items.push(`<span class="o flat">情绪 · 龙头 ${esc(a.leader.name)} ${esc(lt || '已见顶')} · 观望</span>`);
   }
   if (extra && !items.length) return '';   // 手机端只在有机会时显示，替换首卡「按规则」一行
-  return `<div class="opp${items.length ? '' : ' idle'}${extra ? ` ${extra}` : ''}"><b>机会</b>${items.join('') || '<span>暂无机构或情绪机会</span>'}</div>`;
+  const f2 = S.result.final, sug = extra ? posSugHTML(f2, st.startsWith('大主升') && PREFERENCE_EXCLUDED.includes(f2.leadShown)) : '';
+  return `<div class="opp${items.length ? '' : ' idle'}${extra ? ` ${extra}` : ''}"><b>机会</b>${items.join('') || '<span>暂无机构或情绪机会</span>'}${sug}</div>`;
 }
 
 function statusChips() {
