@@ -3,7 +3,8 @@
  * 脉络：指数止跌 → 龙头主升、打开高度 → 龙头震荡，补涨开启 → 高标依次见顶、新高标接力 → 龙头反抽双顶 → 情绪退潮。
  * 主线之外可有一条伴生线，随主线周期一起结束。
  */
-import { GENERIC_THEME } from './engine.js?v=20261028d';
+import { GENERIC_THEME } from './engine.js?v=20261110a';
+import { indexStage } from './position.js?v=20261110a';
 
 export const CYCLE_PARAMS = Object.freeze({
   PANIC_DOWN: 30, SHAKE_AMP: 12.0, SHAKE_FROM_HIGH: 2.0, DROP: -5.0, STALL: 3.0, WIN: 3, STRENGTH: 6, STRENGTH_RES: 5, RES_LOOK: 5, HOLD: 3,
@@ -155,11 +156,11 @@ export function cycleReplay({ dates: D, pools: P, kline, feat, params = CYCLE_PA
     const fam = familyOfTheme(L.board);
     for (let j = i; j < Math.min(D.length, i + prm.RES_LOOK + 1); j++) {
       const f = feat[D[j]];
-      if (f && String(f.state).startsWith('大主升') && f.lead === fam) return true;
+      if (f && indexStage(f.state) === '主升' && f.lead === fam) return true;
     }
     return false;
   }
-  const trig = f => ['震荡', '筑底'].includes(f.state) && f.hExpand === true && f.down !== null && f.down !== undefined && f.down <= 15 && (f.lad3 ?? 0) >= 3;
+  const trig = f => ['筑底', '反弹'].includes(indexStage(f.state)) && f.hExpand === true && f.down !== null && f.down !== undefined && f.down <= 15 && (f.lad3 ?? 0) >= 3;
   const fresh = (d, L, i) => ({ start: d, leader: L, resonance: resonance(i, L), main: newLine(L.code, L.name, d, L.board), comp: null, rebound: null, end: null });
 
   const cycles = []; let cur = null;

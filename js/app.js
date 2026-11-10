@@ -2,11 +2,11 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261028d';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, POSITION, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261028d';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261028d';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261028d';
-import { suggestPosition, RULE_TEXT } from './position.js?v=20261028d';
+import ds, { OVERSEAS } from './datasource.js?v=20261110a';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261110a';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261110a';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261110a';
+import { indexStage, positionOf, RULE_TEXT } from './position.js?v=20261110a';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -88,7 +88,8 @@ function withToday(H) {
   const t = S.today, date = S.calendar?.date;
   const q = t.quotes?.ok ? t.quotes.rows : null;
   const shq = q?.find(r => r.symbol === 'sh000001'), q985 = q?.find(r => r.symbol === 'sh000985');
-  if (!shq || shq.sourceDate !== date) return { H: { ...H, rsi: wilderRSI(H.c985, 12) }, todayAppended: false };
+  // 已发布的收盘种子含当天完整行情，无需再附加一条实时记录。
+  if (H.seedThrough === date || !shq || shq.sourceDate !== date) return { H: { ...H, rsi: wilderRSI(H.c985, 12) }, todayAppended: false };
   // 全天量能：盘中用预估；午休或报价暂时不新鲜时沿用当日最后一次预估；15:00 后用来源报告的累计额；否则未知
   const tv = t.turnover;
   if (tv?.ok && tv.estimated && isNum(tv.projectedFullDay)) t.lastProjected = { date, value: tv.projectedFullDay };
@@ -189,7 +190,7 @@ async function ordinaryRound() {
   }
   // 成交额前列（领涨集团）：主升状态每轮，其余每 3 轮
   const st = S.result?.final?.state ?? '';
-  if (st.startsWith('大主升') || S.emo?.active || S.tick % 3 === 0) { const top = await ds.getTopTurnover(20); if (top.ok) S.today.top = top; }
+  if (st === '主升' || S.emo?.active || S.tick % 3 === 0) { const top = await ds.getTopTurnover(20); if (top.ok) S.today.top = top; }
 }
 
 async function wideRound() {
@@ -336,7 +337,7 @@ async function applyPremarket() {
 function premarketHTML() {
   const p = S.premarket; if (!p || p.forDate !== S.calendar?.date || !p.probs) return '';
   const pc = v => `${Math.round((v ?? 0) * 100)}%`;
-  const items = [['维持', `维持${p.stage}`, 'flat'], ['进入下一阶段', p.next ? `进入${p.next}` : null, 'up'], ['回退', p.prev ? `回退${p.prev}` : null, 'down']]
+  const items = [['维持', `维持${indexStage(p.stage)}`, 'flat'], ['进入下一阶段', p.next ? `进入${indexStage(p.next)}` : null, 'up'], ['回退', p.prev ? `回退${indexStage(p.prev)}` : null, 'down']]
     .filter(([, label]) => label);
   const top = items.reduce((a, b) => ((p.probs[b[0]] ?? 0) > (p.probs[a[0]] ?? 0) ? b : a));
   // 取整后几项相加须正好 100%（最大余数法）；非零项至少 1%、从最大项里扣（2026-10-23：维持 99.5% + 进入 0.5% 各自四舍五入成了 100% + 1%）
@@ -348,6 +349,7 @@ function premarketHTML() {
   const bt = p.backtest ?? {}, lv = p.live ?? {};
   const hit = isNum(bt.top) ? `回测最可能命中 ${pc(bt.top)}${lv.n ? ` · 实盘 ${lv.hit}/${lv.n}` : ''}` : '';
   const tip = [`盘前阶段预判（${p.forDate}，基于 ${p.basedOn} 收盘；隔夜费城半导体 ${fmtPct(p.sox, 1)}，${p.bucket}档）`,
+    p.stageRule ? '' : '按发布时旧口径，反弹依据上证站上 5、10 日线且 5 日线上拐。',
     ...items.map(([k, label]) => `${label} ${shown[k]}${p.need?.[k] ? `：${p.need[k]}` : ''}`),
     isNum(bt.brier) ? `滚动回测 ${bt.days} 天：Brier ${bt.brier}（只按阶段 ${bt.brierBase}），阶段真变化的日子事前给到 ${pc(bt.chgP)}` : '',
     hit,
@@ -489,7 +491,7 @@ async function tick() {
       S.backfill.attempts = attempts;
     } else if (!needWarm && (S.calendar.refreshRecommended || !S.today.quotes)) {
       const st = S.result?.final?.state;
-      if (S.tick % 5 === 4 && (st === '震荡' || st === '筑底') && S.calendar.isTradingDay) await wideRound();
+      if (S.tick % 5 === 4 && middleStage(st) && S.calendar.isTradingDay) await wideRound();
       else await ordinaryRound();
       S.tick++;
     }
@@ -597,17 +599,21 @@ function phaseInfo() {
 }
 
 const EVENT_TEXT = {
-  '共振爆发': lead => `共振爆发：主线板块「${FAMILY_LABEL[lead] ?? lead}」。按规则：可快速提升至重仓（1–2 笔），优先领涨集团或对应 ETF${PREFERENCE_EXCLUDED.includes(lead) ? '（该板块为偏好不参与）' : ''}。`,
-  '风险降仓': () => '风险信号叠加：按规则降至半仓。',
-  '破位清仓': () => '主线破位：按规则清仓观望。',
-  '全A跌破10日线': () => '全A 跌破 10 日线，主升环境破坏：按规则清仓，转入震荡观望。',
-  '转入主跌': () => '指数转入主跌：按规则空仓，不抄底。',
-  '主跌结束（企稳）': () => '指数站上 5 日线，主跌暂告段落：转入筑底，继续空仓等待共振。',
-  '主线切换': lead => `主线切换至「${FAMILY_LABEL[lead] ?? lead}」：按规则调仓，仓位不变。`,
+  '共振爆发': f => `主线板块「${FAMILY_LABEL[f.leadShown] ?? f.leadShown}」与指数共振。${stagePositionText(f)}${PREFERENCE_EXCLUDED.includes(f.leadShown) ? '该板块为偏好不参与。' : ''}`,
+  '风险降仓': f => `主升阶段风险信号叠加。${stagePositionText(f)}`,
+  '破位清仓': f => `主线破位。${stagePositionText(f)}`,
+  '全A跌破10日线': f => `全A 跌破 10 日线，退出主升。${stagePositionText(f)}`,
+  '转入主跌': stagePositionText,
+  '主跌结束（企稳）': f => `上证站上 5 日线，结束主跌。${stagePositionText(f)}`,
+  '主线切换': f => `主线切换至「${FAMILY_LABEL[f.leadShown] ?? f.leadShown}」。${stagePositionText(f)}`,
+  '转入反弹': f => `${REBOUND_RULE}。${stagePositionText(f)}`,
+  '回落筑底': f => `三大指数回落至反弹门槛以下。${stagePositionText(f)}`,
 };
+function stagePositionText(f) { return `指数线${f.state}，仓位档位 ${positionOf(f.state)}。`; }
+const eventName = event => event === '风险降仓' ? '风险信号叠加' : event;
 
-function eventText(ev, lead) {
-  return (EVENT_TEXT[ev] ?? (() => ev))(lead);
+function eventText(f) {
+  return (EVENT_TEXT[f.event] ?? (() => f.event))(f);
 }
 
 function maybeAlert() {
@@ -618,9 +624,9 @@ function maybeAlert() {
   fired[key] = Date.now();
   for (const k of Object.keys(fired)) if (!k.startsWith(f.date)) delete fired[k];
   save('fired', fired);
-  const text = eventText(f.event, f.leadShown);
-  const log = load(`log.${f.date}`, []); log.unshift({ at: new Date().toISOString(), level: p.alertLevel, event: f.event, text }); save(`log.${f.date}`, log.slice(0, 30));
-  notify(`【${p.alertLevel}】${f.event}`, text);
+  const event = eventName(f.event), text = eventText(f);
+  const log = load(`log.${f.date}`, []); log.unshift({ at: new Date().toISOString(), level: p.alertLevel, event, text }); save(`log.${f.date}`, log.slice(0, 30));
+  notify(`【${p.alertLevel}】${event}`, text);
 }
 
 function maybeEmoAlert() {
@@ -656,21 +662,21 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.10.28d';
+const APP_VERSION = '2026.11.10a';
 const STAGE_META = {
-  '大主升': { cls: 'up', name: '大主升', sub: '机构或情绪趋势，与指数共振' },
-  '大主升-减仓': { cls: 'up', name: '大主升', sub: '主线仍在，风险信号叠加' },
-  '震荡': { cls: 'flat', name: '震荡', sub: '无主线，轮动混沌' },
-  '筑底': { cls: 'flat', name: '筑底', sub: '主跌结束，震荡等待共振' },
+  '主升': { cls: 'up', name: '主升', sub: '主线板块与指数共振' },
+  '反弹': { cls: 'rebound', name: '反弹', sub: '三大指数达到反弹门槛' },
+  '筑底': { cls: 'flat', name: '筑底', sub: '等待三大指数达到反弹门槛' },
   '主跌': { cls: 'down', name: '主跌', sub: '领跌板块带动指数下行' },
 };
 const ACTION = {
-  '大主升': '按规则：可参与，重仓；首次分歧时加仓',
-  '大主升-减仓': '按规则：降至半仓，破位即清仓',
-  '震荡': '按规则：观望（空仓），或小仓套利',
-  '筑底': '按规则：观望（空仓），不抄底，等待共振',
-  '主跌': '按规则：观望（空仓），不抄底',
+  '主升': '按规则：主线与指数共振',
+  '反弹': '按规则：等待主升共振',
+  '筑底': '按规则：观察均线修复',
+  '主跌': '按规则：空仓观望',
 };
+const REBOUND_RULE = '全A、热股、昨成交10 至少 1 个站上 10 日线，或至少 2 个站上 5 日线';
+const middleStage = state => state === '筑底' || state === '反弹';
 const F1_STEPS = ['超跌', '首次反弹', '二次探底', '再站均线'];
 const cls3 = v => (v === true ? 'y' : v === false ? 'n' : 'u');
 const sign = v => (isNum(v) ? (v > 0 ? 'r' : v < 0 ? 'g' : '') : '');
@@ -679,18 +685,18 @@ const sign = v => (isNum(v) ? (v > 0 ? 'r' : v < 0 ? 'g' : '') : '');
 function emoRead() {
   const e = S.emo; if (!e?.cycles) return '周期数据未就绪';
   const a = e.active;
-  if (!a) return e.phase === '退潮' ? `退潮中（${e.last.leader.name} 周期 ${e.last.end.slice(5)} 结束）` : '无（多在指数震荡时出现）';
+  if (!a) return e.phase === '退潮' ? `退潮中（${e.last.leader.name} 周期 ${e.last.end.slice(5)} 结束）` : '无（多在筑底或反弹时出现）';
   const h = a.main.chain.at(-1), c = a.comp?.chain.at(-1);
   return `龙头 ${a.leader.name} · ${e.phase}${h.code !== a.leader.code ? `（高标 ${h.name}）` : ''}${c ? ` · 伴生 ${c.name}` : ''}`;
 }
-/** 下跌周期起点（2026-10-22 用户规则）：主跌 → 筑底/震荡 → 主跌，中间没有出现反弹（指数站上 5、10 日线且 5 日线上拐）或大主升，
+/** 下跌周期起点（2026-10-22 用户规则）：两次主跌之间，上证未站上 5、10 日线且 5 日线上拐（A1），也未进入主升，
  * 仍算同一下跌周期，领跌板块与「主跌以来」都从最早那段主跌的起点算。与 研究/回测/build_timeline.py 同口径。 */
 function declineCycleStart(rows) {
   const last = rows.at(-1); if (!last || last.state !== '主跌') return null;
   let start = null;
   for (let k = rows.length - 1; k >= 0; k--) {
     const r = rows[k];
-    if (r.state.startsWith('大主升') || ((r.state === '筑底' || r.state === '震荡') && r.A1 === true)) break;
+    if (r.state === '主升' || (middleStage(r.state) && r.A1 === true)) break;
     if (r.state === '主跌') start = r.date;
   }
   return start;
@@ -719,7 +725,7 @@ function condGroups(f) {
   const f1v = f.f1full ? true : f.f1part ? null : false;
   const g = v => (v === true ? '✓' : v === false ? '×' : '?');
   const gateRead = `全A ${g(f.gA)}　热股 ${g(f.gHot)}　昨成交10 ${g(f.gZ10)}`;
-  const holding = f.state.startsWith('大主升');
+  const holding = f.state === '主升';
   const RISK_LABEL = { '主线族巨震': '主线板块巨震', '主线族连续2日跌破5日线': '主线板块连续2日跌破5日线' };   // 引擎内部名 → 显示名
   const riskItem = (name, short, read) => [holding ? (f.risk.includes(name) ? true : f.riskUnknown.includes(name) ? null : false) : null, RISK_LABEL[name] ?? name, short, holding ? read : '仅在主升状态检查'];
   return [
@@ -801,12 +807,12 @@ function declineLeaders(since, n = 3) {
   return Object.keys(FAMILIES).flatMap(f => boardStats(f, k)).filter(b => isNum(b.pS)).sort((a, b) => a.pS - b.pS).slice(0, n);
 }
 function mainBoards(f) {
-  if (f.state.startsWith('大主升') || (f.collective === true && f.state !== '主跌'))
+  if (f.state === '主升' || (f.collective === true && f.state !== '主跌'))
     return { role: '主流板块', rows: boardStats(f.leadShown).sort((a, b) => (b.p5 ?? -99) - (a.p5 ?? -99)).slice(0, 2).map(x => ({ ...x, etf: etfFor(x.code) })) };
   const ds = S.result.declineSince ?? S.result.stateSince;
   if (f.state === '主跌' && ds) {
     const rows = declineLeaders(ds);
-    const same = ds !== S.result.stateSince ? '（中间未反弹，同一下跌周期）' : '';
+    const same = ds !== S.result.stateSince ? '（同一下跌周期）' : '';
     if (rows) return { role: '领跌板块', note: `自 ${ds.slice(5)} 主跌以来${same} · 最多 3 个`, since: true, rows };
   }
   if (f.state === '主跌' || f.mainFall === true)
@@ -843,7 +849,9 @@ function connState() {
 function heroHTML(f) {
   const meta = STAGE_META[f.state] ?? { cls: 'flat', name: f.state, sub: '' };
   const r = S.result, y = r.yesterday;
-  const pref = f.state.startsWith('大主升') && PREFERENCE_EXCLUDED.includes(f.leadShown);
+  const middle = middleStage(f.state);
+  const summary = middle ? (f.rebound === null ? '三大指数均线待确认' : `三大指数站上 10 日线 ${f.reboundAbove10}/3 · 站上 5 日线 ${f.reboundAbove5}/3`)
+    : f.coreState === '大主升-减仓' ? '主线仍在，风险信号叠加' : meta.sub;
   const days = r.stateDays ? `第 ${r.stateDays} 个交易日` : '';
   const kpi = (lab, val, c = '', note = '') => `<div class="kpi"><span>${lab}</span><b class="${c}">${val}</b>${note ? `<small class="kpi-note">${note}</small>` : ''}</div>`;
   const yAmt = r.todayAppended ? y?.amt : null;
@@ -852,9 +860,9 @@ function heroHTML(f) {
   const lastAlert = load(`log.${S.calendar?.date}`, [])[0];
   return `<section class="card hero ${meta.cls}">
     <div class="hero-heading"><i class="state-dot" aria-hidden="true"></i>指数线（机构）<span class="eyebrow">MARKET STATE</span></div>
-    <div class="hero-top"><div class="stage">${esc(meta.name)}</div><div class="position-block"><span class="position-label">指数仓位</span><span class="pos">${esc(POSITION[f.state] ?? '—')}</span></div></div>
-    <p class="sub">${esc(meta.sub)}${r.stateSince ? ` · <span>自 ${esc(r.stateSince)} 起 ${days}</span>` : ''}${r.preview ? ` · <span class="pv">${esc((y?.date ?? '').slice(5))} 收盘判定，实时数据载入中…</span>` : ''}</p>
-    <div class="act">${esc(pref ? '主线为偏好不参与的板块（外围驱动）：按规则观望' : ACTION[f.state])}${posSugHTML(f, pref)}</div>${oppHTML('mob-only')}
+    <div class="hero-top"><div class="stage">${esc(meta.name)}</div><div class="position-block"><span class="position-label">指数仓位</span><span class="pos">${esc(positionOf(f.state) ?? '—')}</span></div></div>
+    <p class="sub"${middle ? ` title="${esc(REBOUND_RULE)}"` : ''}>${esc(summary)}${r.stateSince ? ` · <span>自 ${esc(r.stateSince)} 起 ${days}</span>` : ''}${r.preview ? ` · <span class="pv">${esc((y?.date ?? '').slice(5))} 收盘判定，实时数据载入中…</span>` : ''}</p>
+    <div class="act">${esc(ACTION[f.state])}${posSugHTML(f)}</div>${oppHTML('mob-only')}
     <div class="kpis">
       ${kpi('上证指数', isNum(f.close) ? `${f.close.toFixed(2)} <small class="${sign(f.p1)}">${fmtPct(f.p1)}</small>` : '—', '')}
       ${kpi(r.todayAppended && S.today.amtSource ? `全天量能（${S.today.amtSource.replace('全天', '')}）` : '成交额', isNum(f.amt) ? `${fmtYi(f.amt).replace(' ', '')} <small>×${isNum(f.vr) ? f.vr.toFixed(2) : '—'}</small>` : '—', '',
@@ -863,8 +871,8 @@ function heroHTML(f) {
     </div>
     <div class="steps" title="二次探底进度">${steps}</div>
     <div class="steps-lab">${F1_STEPS.map(s => `<span>${s}</span>`).join('')}</div>
-    ${r.todayAppended && f.event ? `<div class="tent">今日试算：${esc(f.event)}（昨日确认：${esc(STAGE_META[y?.state]?.name ?? '—')}）${phaseInfo().alertLevel ? '' : '，非提醒时段'}</div>`
-      : lastAlert ? `<div class="tent">最近提醒 ${esc(new Date(lastAlert.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}：${esc(lastAlert.event)}</div>` : ''}
+    ${r.todayAppended && f.event ? `<div class="tent">今日试算：${esc(eventName(f.event))}（昨日确认：${esc(STAGE_META[y?.state]?.name ?? '—')}）${phaseInfo().alertLevel ? '' : '，非提醒时段'}</div>`
+      : lastAlert ? `<div class="tent">最近提醒 ${esc(new Date(lastAlert.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}：${esc(eventName(lastAlert.event))}</div>` : ''}
   </section>`;
 }
 /** 迷你 K 线（SVG）：红涨绿跌，细线为 5 日均线；盘中未收定的一根画成虚线空心。bars 含前置的 5 日线计算根。 */
@@ -932,22 +940,21 @@ function boardsHTML(f) {
     ${b.etf ? `<div class="etf" title="跟踪 ${esc(b.etf.index)}；按截至 ${esc(b.etf.asOf)} 的 20 日成交额选取">ETF：${esc(b.etf.name)}（${esc(b.etf.code)}）· ${esc(b.etf.index)}</div>` : ''}</div>`).join('');
   return `<section class="card board-card"><h3>${mb.role}<span class="cnt mid-hide">${esc(mb.note ?? '最多 2 个')}</span><span class="cnt mid-only">${mb.since ? '今日 · 主跌以来 · 5日' : '今日 · 5日'}</span></h3>${rows || '<p class="muted">无主线：未出现集体走强且与指数同步的板块</p>'}${overseasInline()}</section>`;
 }
-/** 左列下部：板块强弱（任何阶段都显示，固定在上）+ 状态卡（主升/情绪周期 → 领涨集团；震荡/筑底 → 小仓套利；主跌无）。
- * 主跌期板块强弱占满剩余高度；有状态卡时状态卡限高，板块强弱保持固定长度，不会被挤没（2026-10-21 用户要求） */
+/** 左列下部：板块强弱和阶段卡共用剩余空间，桌面表格分别滚动，手机随整页滚动。 */
 function extraHTML(f) {
   return sectorHTML(f) + stateCardHTML(f);
 }
 function stateCardHTML(f) {
-  if ((f.state.startsWith('大主升') || S.emo?.active) && S.today.top?.ok) {
+  if ((f.state === '主升' || S.emo?.active) && S.today.top?.ok) {
     const lg = S.today.top.rows.filter(x => isNum(x.pct) && x.pct >= 3).slice(0, 6);
-    return `<section class="card state-card desk-only"><h3>领涨集团<span class="cnt">成交额前20 · 涨幅≥3%</span></h3>${lg.length ? `<table class="mini"><thead><tr><th>名称</th><th>涨幅</th><th>成交额</th></tr></thead><tbody>${lg.map(x => `<tr><td>${esc(x.name)}</td><td class="r">${fmtPct(x.pct)}</td><td>${fmtYi(x.amount)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">暂无满足条件的个股</p>'}<p class="note">仅展示客观行情，不构成投资建议</p></section>`;
+    return `<section class="card state-card desk-only"><h3>领涨集团<span class="cnt">成交额前20 · 涨幅≥3%</span></h3><div class="panel-scroll" tabindex="0" role="region" aria-label="领涨集团明细">${lg.length ? `<table class="mini"><thead><tr><th>名称</th><th>涨幅</th><th>成交额</th></tr></thead><tbody>${lg.map(x => `<tr><td>${esc(x.name)}</td><td class="r">${fmtPct(x.pct)}</td><td>${fmtYi(x.amount)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">暂无满足条件的个股</p>'}<p class="note">仅展示客观行情，不构成投资建议</p></div></section>`;
   }
-  if (f.state === '震荡' || f.state === '筑底') {
+  if (middleStage(f.state)) {
     const H = S.result.H, lowNow = H.sh.low.at(-1), prev = H.sh.low.slice(-21, -1).filter(isNum);
     const rebound = S.result.todayAppended && isNum(lowNow) && prev.length && lowNow <= Math.min(...prev) * 1.003 && f.close >= lowNow * 1.005;
     const w = S.today.wide;
-    return `<section class="card state-card desk-only"><h3>小仓套利</h3><p class="muted">${rebound ? '指数破位后被拉回：按规则可小仓博宽基 ETF 回拉，空间有限' : '暂无指数破位拉回机会'}</p>
-      ${w?.ok ? `<table class="mini"><thead><tr><th>宽幅候选</th><th>振幅</th><th>20日均</th><th>堆量</th><th>反包</th></tr></thead><tbody>${w.rows.slice(0, 5).map(x => `<tr><td>${esc(x.name)}</td><td>${x.currentAmplitudePct.toFixed(1)}%</td><td>${x.averageAmplitude20Pct.toFixed(1)}%</td><td>${x.accumulationRatio.toFixed(2)}</td><td>${x.reversalCount20}</td></tr>`).join('')}</tbody></table><p class="note">只列客观数据，约每 5 分钟更新</p>` : '<p class="note">宽幅震荡候选约每 5 分钟扫描一次</p>'}</section>`;
+    return `<section class="card state-card desk-only"><h3>小仓套利</h3><div class="panel-scroll" tabindex="0" role="region" aria-label="小仓套利明细"><p class="muted">${rebound ? '指数破位后被拉回：按规则可小仓博宽基 ETF 回拉，空间有限' : '暂无指数破位拉回机会'}</p>
+      ${w?.ok ? `<table class="mini"><thead><tr><th>宽幅候选</th><th>振幅</th><th>20日均</th><th>堆量</th><th>反包</th></tr></thead><tbody>${w.rows.slice(0, 5).map(x => `<tr><td>${esc(x.name)}</td><td>${x.currentAmplitudePct.toFixed(1)}%</td><td>${x.averageAmplitude20Pct.toFixed(1)}%</td><td>${x.accumulationRatio.toFixed(2)}</td><td>${x.reversalCount20}</td></tr>`).join('')}</tbody></table><p class="note">只列客观数据，约每 5 分钟更新</p>` : '<p class="note">宽幅震荡候选约每 5 分钟扫描一次</p>'}</div></section>`;
   }
   return '';
 }
@@ -981,15 +988,14 @@ function sectorHTML(f) {
     const hb = [...sec].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
     const asOf = isToday ? (partial ? `今日 · 轮询中 ${tb}/${ALL_BOARDS.length}` : '今日') : `截至 ${esc(H.dates[j].slice(5))}`;
     const td = (v, d = 2, wait = false) => `<td class="${sign(v)}"${wait && !isNum(v) ? ' title="今日数据轮询中"' : ''}>${wait && !isNum(v) ? '…' : fmtPct(v, d)}</td>`;
-    const body = sec.map((r, k) => `<tr class="sec${r.hotToday ? ' hot' : ''}${k >= XP_N ? ' more' : ''}" title="${esc(r.title)}"><td>${esc(r.name)}${r.pref ? ' <small class="muted">偏好不参与</small>' : ''}${r.hotToday ? ` <small class="hot-tag">今日热点 ×${r.hotToday}</small>` : r.hotRecent ? ` <small class="muted">近期热点 ${esc(r.hotRecent)}</small>` : ''}</td>${td(r.p1, 2, isToday)}${td(r.p5, 1, isToday)}</tr>`
-      + (r.branches ?? []).map(b => `<tr class="br${k >= XP_N ? ' more' : ''}"><td>└ ${esc(b.name)}</td>${td(b.p1, 2, isToday)}${td(b.p5, 1, isToday)}</tr>`).join('')).join('');
-    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${sec.length} 个大类 · ${asOf} · 按${fs.k === 'fT' ? dayLabel : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><table class="mini sec-table xp${S.xp?.sec ? ' open' : ''}"><thead><tr><th>板块</th>${th('fT', dayLabel)}${th('f5', '近5日')}</tr></thead><tbody>${body}</tbody></table>${xpBtn('sec', sec.length, '个大类')}
+    const body = sec.map(r => `<tr class="sec${r.hotToday ? ' hot' : ''}" title="${esc(r.title)}"><td>${esc(r.name)}${r.pref ? ' <small class="muted">偏好不参与</small>' : ''}${r.hotToday ? ` <small class="hot-tag">今日热点 ×${r.hotToday}</small>` : r.hotRecent ? ` <small class="muted">近期热点 ${esc(r.hotRecent)}</small>` : ''}</td>${td(r.p1, 2, isToday)}${td(r.p5, 1, isToday)}</tr>`
+      + (r.branches ?? []).map(b => `<tr class="br"><td>└ ${esc(b.name)}</td>${td(b.p1, 2, isToday)}${td(b.p5, 1, isToday)}</tr>`).join('')).join('');
+    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${sec.length} 个大类 · ${asOf} · 按${fs.k === 'fT' ? dayLabel : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><div class="panel-scroll" tabindex="0" role="region" aria-label="板块强弱明细"><table class="mini sec-table"><thead><tr><th>板块</th>${th('fT', dayLabel)}${th('f5', '近5日')}</tr></thead><tbody>${body}</tbody></table></div>
     <div class="fam-line mob-only"><p><b>强</b>${hb.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${hb.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
   }
-  return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${head}</span></h3><table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>
+  return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${head}</span></h3><div class="panel-scroll" tabindex="0" role="region" aria-label="板块强弱明细"><table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table></div>
     <div class="fam-line mob-only"><p><b>强</b>${byP5.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${byP5.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
 }
-const segName = st => (st === '大主升-减仓' ? '大主升·减仓' : st);
 function segTag(g) {
   const parts = [];
   if (g.leader) parts.push(`龙头 ${g.leader}`);
@@ -1001,12 +1007,12 @@ function segTag(g) {
 /** 指数线：复盘时间线 + 之后由引擎逐日结果续接 */
 function indexSegs() {
   const tl = S.timeline?.index ?? [], through = S.timeline?.through ?? '';
-  const segs = tl.map(g => ({ ...g }));
+  const segs = tl.map(g => ({ ...g, state: indexStage(g.state) }));
   for (const r of S.result.rows.filter(x => x.date > through)) {
     const last = segs.at(-1);
     if (last && last.state === r.state) { last.end = r.date; continue; }
     const g = { start: r.date, end: r.date, state: r.state };
-    if (r.state.startsWith('大主升')) g.board = labelBoard(null, r.leadShown);
+    if (r.state === '主升') g.board = labelBoard(null, r.leadShown);
     else if (r.state === '主跌') g.board = labelBoard(null, r.weak);
     segs.push(g);
   }
@@ -1018,13 +1024,13 @@ function indexSegs() {
   return segs;
 }
 const dspan = (g, now = false) => `${g.start.slice(2).replace(/-/g, '.')}${now ? '–至今' : g.end && g.end !== g.start ? `–${g.end.slice(5).replace('-', '.')}` : ''}`;
-/** 手机端（≤860 宽）板块强弱与两条时间线只显示最近 XP_N 段，其余点「展开全部」；桌面与中屏是一屏布局，不折叠 */
+/** 手机端（≤860 宽）两条时间线默认显示最近 XP_N 段，其余点「展开全部」。 */
 const XP_N = 5;
 const xpBtn = (key, n, unit) => (n > XP_N ? `<button type="button" class="xp-btn" data-xp="${key}">${S.xp?.[key] ? '收起' : `展开全部（共 ${n} ${unit}）`}</button>` : '');
 function logHTML() {
   const log = load(`log.${S.calendar?.date}`, []).slice(0, 2);
   const idxSegs = indexSegs().reverse();
-  const icls = st => (st.startsWith('大主升') ? 'up' : st === '主跌' ? 'down' : 'flat');
+  const icls = st => STAGE_META[st]?.cls ?? 'flat';
   const emoSegs = S.emo?.cycles ? cycleSegments(S.emo.cycles, S.emo.lastDate).reverse() : [];
   const emoItem = (g, k) => {
     const tag = [];
@@ -1037,35 +1043,31 @@ function logHTML() {
     const pos = g.phase === '情绪试探' || g.phase === '退潮' ? '空仓' : g.phase === '情绪主升' ? '半仓' : cyclePosition(g.phase);
     return `<li class="${g.phase === '退潮' ? 'down' : g.phase === '情绪试探' ? 'flat' : 'up'}${k >= XP_N ? ' more' : ''}"><time>${esc(dspan(g, k === 0 && (!g.end || g.open)))}</time><span class="event"><b class="st">${esc(g.phase)}</b>（${esc(pos)}）<small>（${esc(tag.filter(Boolean).join(' · '))}）</small></span></li>`;
   };
-  const cur = idxSegs[0], ep = S.emo?.phase;
+  const ep = S.emo?.phase;
   const st = leaderStop();
   const stopTag = st ? `<span class="stop-tag ${st.ok === true ? 'ok' : ''}" title="下一轮行情的前提：主跌领跌板块先止跌（站上 5 日线且近 3 日未再创新低）。仅参考，不参与判定。">${st.ok === true ? '已止跌' : st.ok === false ? '未止跌' : '止跌待定'}</span>` : '';
-  const now = `机构线 <b>${esc(segName(cur?.state ?? '—'))}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>${st ? ` · ${stopTag}<span class="stop-read">${esc(st.read)}</span>` : ''}`;
+  const now = `机构线 <b>${esc(S.result.final?.state ?? '—')}期</b> · 情绪线 <b>${esc(!ep ? '—' : ep === '无情绪周期' ? '无周期' : `${ep}期`)}</b>${st ? ` · ${stopTag}<span class="stop-read">${esc(st.read)}</span>` : ''}`;
   const nowShort = now.replace(/<span class="stop-read">[\s\S]*?<\/span>/, '');
   return `<section class="card condition-card log-card desk-only"><h3><span class="section-no" aria-hidden="true">00</span>提醒与切换<span class="cnt">近一年 · 指数线 ${idxSegs.length} 段 · 情绪周期 ${S.emo?.cycles?.length ?? 0} 个</span><span class="cnt now-h">${nowShort}</span></h3><div class="log-top"><ul class="log ${log.length ? 'hot' : 'idle'}">
-    ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(x.event)}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span>${oppHTML()}${premarketHTML()}</div>
-    <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl xp${S.xp?.idx ? ' open' : ''}">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}${k >= XP_N ? ' more' : ''}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(segName(g.state))}</b>（${esc(POSITION[g.state] ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul>${xpBtn('idx', idxSegs.length, '段')}</div>
+    ${log.map(x => `<li class="${x.level === '确认' ? 'lv-ok' : 'lv-warn'}${Date.now() - new Date(x.at).getTime() < 30 * 60000 ? ' fresh' : ''}" title="${esc(x.text ?? '')}"><time>${esc(new Date(x.at).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5))}</time><b class="lv">${esc(x.level)}</b><span class="event">${esc(eventName(x.event))}</span></li>`).join('') || '<li class="muted">今日暂无状态切换</li>'}</ul><span class="now-tag">现状：${now}</span>${oppHTML()}${premarketHTML()}</div>
+    <div class="tl2"><div class="tlcol"><h4>指数线（机构）</h4><ul class="log tl xp${S.xp?.idx ? ' open' : ''}">${idxSegs.map((g, k) => { const t = segTag(g); return `<li class="${icls(g.state)}${k >= XP_N ? ' more' : ''}"><time>${esc(dspan(g, k === 0))}</time><span class="event"><b class="st">${esc(g.state)}</b>（${esc(positionOf(g.state) ?? '—')}）${t ? `<small>（${esc(t)}）</small>` : ''}</span></li>`; }).join('')}</ul>${xpBtn('idx', idxSegs.length, '段')}</div>
     <div class="tlcol"><h4>情绪线</h4><ul class="log tl xp${S.xp?.emo ? ' open' : ''}">${emoSegs.map(emoItem).join('') || '<li class="muted">近一年无情绪周期</li>'}</ul>${xpBtn('emo', emoSegs.length, '段')}</div></div></section>`;
 }
 
-/** 仓位建议（position.js）：指数线档位 + 情绪主升半仓，合计不超过 100%；悬停看构成与规则 */
-function posSugHTML(f, pref) {
-  const a = S.emo?.active;
-  const emoOn = S.emo?.position === '半仓' && !!a && !a.voided && !labelBoard(a.leader.board ?? '').startsWith('资源');
-  const s = suggestPosition(f.state, { indexPref: pref, emoOn });
-  if (s.pct === null) return '';
-  const tip = `指数线 ${segName(f.state)}${pref ? '（偏好不参与）' : ''} ${s.index}% + 情绪线 ${emoOn ? '情绪主升' : '无'} ${s.emo}% = ${s.pct}%。${RULE_TEXT}只给仓位比例，不构成投资建议。`;
-  return `<span class="pos-sug" title="${esc(tip)}">仓位建议 <b>${s.pct}%</b></span>`;
+/** 仓位建议（position.js）：指数线档位，情绪机会单独展示。 */
+function posSugHTML(f) {
+  const position = positionOf(f.state);
+  return position === undefined ? '' : `<span class="pos-sug" title="${esc(RULE_TEXT)}">仓位建议 <b>${position}</b></span>`;
 }
-/** 机会提示（小框）：主跌期不提示；震荡 / 筑底 / 主升期出现机构（共振爆发 → 大主升）或情绪（情绪主升）机会时列出仓位档位。只列档位，不写买卖。 */
+/** 机会提示（小框）：主跌期不提示；机构共振和情绪机会分别展示。 */
 function oppHTML(extra = '') {
   const f = S.result?.final, st = f?.state;
   if (!st) return '';
   if (st === '主跌') return extra ? '' : '<div class="opp idle"><b>机会</b><span>主跌期不提示</span></div>';
   const items = [];
-  if (st.startsWith('大主升')) {
+  if (st === '主升') {
     const lead = f.leadShown, pref = PREFERENCE_EXCLUDED.includes(lead);
-    items.push(`<span class="o ${pref ? 'flat' : 'up'}">机构 · ${esc(segName(st))}（主线 ${esc(FAMILY_LABEL[lead] ?? lead)}）· ${pref ? '偏好不参与' : esc(POSITION[st])}</span>`);
+    items.push(`<span class="o ${pref ? 'flat' : 'up'}">机构 · ${esc(st)}（主线 ${esc(FAMILY_LABEL[lead] ?? lead)}）· ${pref ? '偏好不参与' : esc(positionOf(st))}</span>`);
   }
   const e = S.emo, a = e?.active;
   if (a && !a.voided) {
@@ -1076,7 +1078,7 @@ function oppHTML(extra = '') {
     else items.push(`<span class="o flat">情绪 · 龙头 ${esc(a.leader.name)} ${esc(lt || '已见顶')} · 观望</span>`);
   }
   if (extra && !items.length) return '';   // 手机端只在有机会时显示，替换首卡「按规则」一行
-  const f2 = S.result.final, sug = extra ? posSugHTML(f2, st.startsWith('大主升') && PREFERENCE_EXCLUDED.includes(f2.leadShown)) : '';
+  const sug = extra ? posSugHTML(f) : '';
   return `<div class="opp${items.length ? '' : ' idle'}${extra ? ` ${extra}` : ''}"><b>机会</b>${items.join('') || '<span>暂无机构或情绪机会</span>'}${sug}</div>`;
 }
 
@@ -1106,20 +1108,34 @@ function footHTML() {
     <span>实时 <b class="num">${q?.ok ? esc(q.rows[0]?.sourceTime?.slice(11, 16) ?? '—') : '—'}</b></span>
     <span>页面更新 <b class="num">${S.lastTickAt ? S.lastTickAt.toLocaleTimeString('zh-CN', { hour12: false }) : '—'}</b></span>
     <span class="mob-only">板块 ${tb}/${ALL_BOARDS.length}${tv?.estimated ? ` · 预估 ${fmtYi(tv.projectedFullDay)}` : ''}${S.lastError ? ' · <span class="r">数据源异常</span>' : ''}</span>
-    <span class="disc" title="本页面按预先设定的规则，对公开行情数据做自动判定。盘中结论为试算，开盘起状态切换即发出预警，14:40 后仍成立发出确认，收盘后定格。数据缺失时显示「?」，不会因此判为震荡或发出提醒。个股只列客观数据，仓位只显示规则档位，不构成投资建议，不提供下单。成交额口径：上证指数 + 深证成指。">规则自动判定，盘中为试算 · 数据缺失显示「?」不触发提醒 · 不构成投资建议，不提供下单</span>`;
+    <span class="disc" title="本页面按预先设定的规则，对公开行情数据做自动判定。盘中结论为试算，开盘起状态切换即发出预警，14:40 后仍成立发出确认，收盘后定格。数据不足时等待确认。个股只列客观数据，仓位只显示规则档位，不构成投资建议，不提供下单。成交额口径：上证指数 + 深证成指。">规则自动判定，盘中为试算 · 数据不足时等待确认 · 不构成投资建议，不提供下单</span>`;
 }
 
 function render() {
   const f = S.result?.final;
+  const col1 = $('#col1');
   $('#status').innerHTML = statusChips();
   const cs = connState(); $('#conn').className = `conn ${cs.cls}`; $('#conn').innerHTML = `<i aria-hidden="true"></i>${esc(cs.text)}`;
   $('#foot').innerHTML = footHTML();
   if (!f) {
-    $('#col1').innerHTML = '<section class="card hero flat loading-card"><div class="hero-heading"><i class="state-dot" aria-hidden="true"></i>市场阶段<span class="eyebrow">MARKET STATE</span></div><div class="stage">载入中</div><p class="sub">正在回放历史并获取实时数据…</p><div class="loading-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div></section>';
+    col1.innerHTML = '<section class="card hero flat loading-card"><div class="hero-heading"><i class="state-dot" aria-hidden="true"></i>市场阶段<span class="eyebrow">MARKET STATE</span></div><div class="stage">载入中</div><p class="sub">正在回放历史并获取实时数据…</p><div class="loading-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div></section>';
     $('#col2').innerHTML = ''; $('#col3').innerHTML = ''; return;
   }
   const groups = condGroups(f), G = Object.fromEntries(groups.map(g => [g.key, g]));
-  $('#col1').innerHTML = heroHTML(f) + boardsHTML(f) + overseasHTML() + mobileConds(groups) + extraHTML(f);
+  const active = document.activeElement;
+  const panels = new Map(Array.from(col1.querySelectorAll('.panel-scroll'), panel => [
+    panel.getAttribute('aria-label'), { left: panel.scrollLeft, top: panel.scrollTop, focus: panel.contains(active) },
+  ]));
+  col1.innerHTML = heroHTML(f) + boardsHTML(f) + overseasHTML() + mobileConds(groups) + extraHTML(f);
+  for (const panel of col1.querySelectorAll('.panel-scroll')) {
+    const old = panels.get(panel.getAttribute('aria-label'));
+    if (!old) continue;
+    if (old.focus) {
+      const sort = active.dataset.sort;
+      (sort ? panel.querySelector(`[data-sort="${CSS.escape(sort)}"]`) ?? panel : panel).focus({ preventScroll: true });
+    }
+    panel.scrollTo(old.left, old.top);
+  }
   $('#col2').innerHTML = logHTML() + groupCard(G.res) + groupCard(G.down) + `<div class="merge">${groupCard(G.emo)}${groupCard(G.risk)}${groupCard(G.ref)}</div>`;
   $('#col3').innerHTML = groupCard(G.emo) + groupCard(G.risk) + groupCard(G.ref);
   // 天枢主题：首次出数时卡片入场动画只播一次（轮询重绘不重播）
@@ -1135,6 +1151,7 @@ document.addEventListener('click', e => {
   if (sb) {
     const cur = load('famSort', { k: 'f5', d: -1 }), k = sb.dataset.sort;
     save('famSort', { k, d: cur.k === k ? -cur.d : -1 });
+    sb.closest('.panel-scroll')?.scrollTo(0, 0);
     render(); return;
   }
   const li = e.target.closest('.mgroup .ci'); if (!li) return;

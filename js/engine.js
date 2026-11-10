@@ -3,6 +3,7 @@
  * replay(history) 用已完成的日数据逐日回放仓位状态机；evaluate(history, today) 在回放结果上叠加当日实时数据，
  * 当日缺数据的条件记为 unknown（null），unknown 不会触发任何状态切换或提醒。
  */
+import { indexStage, positionOf } from './position.js?v=20261110a';
 
 export const PARAMS = Object.freeze({
   VR_UP: 1.05, VR_UP_SOFT: 1.20, VR_STALL: 1.15, AMT60_K: 0.95,
@@ -43,11 +44,6 @@ export function themeTop(reasons) {
   for (const [t, n] of c) if (n > count) { name = t; count = n; }   // 并列取先出现者（与 Python Counter.most_common 一致）
   return { name, count };
 }
-/** 指数线（机构）仓位档位；情绪线仓位见 cycle.js cyclePosition */
-export const POSITION = Object.freeze({ '大主升': '重仓', '大主升-减仓': '半仓', '震荡': '空仓', '筑底': '空仓', '主跌': '空仓' });
-/** 指数线仓位档位查询 */
-export const positionOf = state => POSITION[state];
-
 const FAMILY_OF = Object.fromEntries(Object.entries(FAMILIES).flatMap(([f, cs]) => cs.map(c => [c, f])));
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 
@@ -152,11 +148,20 @@ export function features(H, FI, i, P = PARAMS) {
   const panic = tri(isNum(dn) && isNum(rsi[i]), dn >= P.PANIC_DOWN && rsi[i] < P.PANIC_RSI);
   const hi20 = i >= 19 ? maxDefined(sh.slice(i - 19, i + 1)) : null;
   let rHi = null; if (i >= 19) { rHi = i - 19; for (let k = i - 19; k < i; k++) if (isNum(sh[k]) && sh[k] > sh[rHi]) rHi = k; }
-  const above = x => { if (!x) return null; const m = ma(x, P.GATE_MA, i); return isNum(x[i]) && isNum(m) ? x[i] > m : null; };
-  const gA = above(H.boards[GATE_BOARDS.qa]?.close), gHot = above(H.boards[GATE_BOARDS.hot]?.close), gZ10 = above(H.boards[GATE_BOARDS.z10]?.close);
+  const above = (code, days) => {
+    const x = H.boards[code]?.close;
+    const m = x ? ma(x, days, i) : null;
+    return isNum(x?.[i]) && isNum(m) ? x[i] > m : null;
+  };
+  const [gA, gHot, gZ10] = Object.values(GATE_BOARDS).map(code => above(code, P.GATE_MA));
   const gate = gA === false || gHot === false || gZ10 === false ? false : gA && gHot && gZ10 ? true : null;
+  const ma5 = Object.values(GATE_BOARDS).map(code => above(code, 5));
+  const ma10 = P.GATE_MA === 10 ? [gA, gHot, gZ10] : Object.values(GATE_BOARDS).map(code => above(code, 10));
+  const count = values => values.filter(v => v === true).length;
+  const rebound = count(ma10) >= 1 || count(ma5) >= 2 ? true
+    : ma10.every(v => v === false) && ma5.filter(v => v !== false).length < 2 ? false : null;
   return { i, date: H.dates[i], close: sh[i], high: hi[i], m5, m10, m5p, p1, p5sh, amt: amt[i], a20, a60, vr, rsi: rsi[i],
-    gA, gHot, gZ10, gate,
+    gA, gHot, gZ10, gate, rebound, reboundAbove5: count(ma5), reboundAbove10: count(ma10),
     A1, D1, pt, top, top5d, f5, fT, lead, weak, cnt, cnt5, collective, sync, mainFall, volVsDecline,
     h, dn, up, brk, lad3, theme, themeName: H.limits.themeName?.[i] ?? null, themeHot, hmax5, hmax10, hExpand, noLoss, ladderOk, brokenRate, panic, hi20, rHi, boardsOk };
 }
@@ -210,7 +215,7 @@ export function replay(H, P = PARAMS) {
       chk('主线族连续2日跌破5日线', isNum(fm5) && isNum(fm5y), FI[Lf][i] < fm5 && FI[Lf][i - 1] < fm5y);
       chk('跌停扩散', isNum(F.dn), F.dn >= P.RETREAT_DOWN);
     }
-    const prev = state; let ev = null;
+    const prev = rows.at(-1)?.state ?? '筑底'; let ev = null;
     if (state === '大主升' || state === '大主升-减仓') {
       const leadNeg = isNum(F.f5[leadHold]) ? F.f5[leadHold] < 0 : null;
       if (T(F.D1) && (leadNeg === true || T(F.mainFall))) { state = '主跌'; ev = '破位清仓'; }
@@ -226,10 +231,13 @@ export function replay(H, P = PARAMS) {
       else if (T(F.D1) && (T(F.mainFall) || (isNum(F.p1) && F.p1 <= -1)) && (state === '震荡' || newLow)) { state = '主跌'; ev = '转入主跌'; }
     }
     const shownLead = state.startsWith('大主升') ? leadHold : F.lead;
-    const row = { ...F, state, prevState: prev, event: ev, position: positionOf(state), leadShown: shownLead, f1: f1.stage, f1full, f1part,
+    let stage = indexStage(state);
+    if (stage === '筑底' && (F.rebound === true || (F.rebound === null && prev === '反弹'))) stage = '反弹';
+    if (!ev && rows.length && stage !== prev) ev = stage === '反弹' ? '转入反弹' : '回落筑底';
+    const row = { ...F, state: stage, coreState: state, prevState: prev, event: ev, position: positionOf(stage), leadShown: shownLead, f1: f1.stage, f1full, f1part,
       volOk, trigger, triggerUnknown, risk, riskUnknown, FI };
     rows.push(row);
-    if (ev) events.push({ date: H.dates[i], event: ev, from: prev, to: state, position: positionOf(state), lead: shownLead });
+    if (ev) events.push({ date: H.dates[i], event: ev, from: prev, to: stage, position: row.position, lead: shownLead });
   }
   return { rows, events, final: rows.at(-1) ?? null, FI };
 }
