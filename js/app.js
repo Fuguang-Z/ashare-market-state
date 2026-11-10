@@ -7,6 +7,7 @@ import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, PREFERENCE_EXCLUDED, 
 import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261110a';
 import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261110a';
 import { indexStage, positionOf, RULE_TEXT } from './position.js?v=20261110a';
+import { readLimitVolume, lvChip } from './limit-volume.js?v=20261110d';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -28,10 +29,14 @@ const S = {
   backfill: { missing: [], boardsDone: 0, limitsDone: 0, complete: true },
   boardK: null, boardKFail: {},          // 板块卡迷你 K 线：{ date, rows:{code:[[日期,开,高,低,收]]} }（已完成日，按日缓存在浏览器）
   overseas: null, overseasFail: {}, overseasQ: null, overseasFile: null, overseasFileDay: null,   // 外围科技：日 K 按日缓存；日韩盘中现价；每日更新写的日 K 文件
+  lvRaw: null, lv: null,     // 极限量池（个股层，2026-11-10）：data/limit_volume.json 原文与归一化结果，只在机会判定里显示读数
 };
 
 function load(key, fallback) { try { return JSON.parse(localStorage.getItem(`${STORE}.${key}`)) ?? fallback; } catch { return fallback; } }
 function save(key, value) { try { localStorage.setItem(`${STORE}.${key}`, JSON.stringify(value)); } catch { /* 存储不可用时只影响提醒去重 */ } }
+
+/* 极限量池（个股层，2026-11-10）：独立于首屏数据链单独取一次，取不到就保持「未接入」，不阻塞也不影响状态判定 */
+staticJSON('limit_volume.json').then(d => { S.lvRaw = d; if (S.result) render(); }).catch(() => { });
 
 async function staticJSON(name) {
   // index.html 头部已并行预取首屏要用的几个文件（window.__pre），第一次直接复用；预取失败就照常再取
@@ -662,7 +667,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.11.10c';
+const APP_VERSION = '2026.11.10d';
 const STAGE_META = {
   '主升': { cls: 'up', name: '主升', sub: '主线板块与指数共振' },
   '反弹': { cls: 'rebound', name: '反弹', sub: '三大指数达到反弹门槛' },
@@ -737,6 +742,7 @@ function condGroups(f) {
       [f.collective, '主线板块集体走强', '主线集体走强', famRead],
       [f.sync, '主线与指数同步上涨', '主线同步', syncRead],
       [f1v, '已完成二次探底', '二次探底', f.f1 ? `进度：${F1_STEPS.slice(0, f.f1).join(' → ')}` : '近期未出现超跌'],
+      [S.lv?.hit ?? null, '极限量个股出现（个股量能历史极值）', '极限量', S.lv?.read ?? '未接入当日选股结果'],
     ] },
     { key: 'down', title: '主跌条件', items: [
       [f.D1, '指数在 5 日线下，5 日线下拐', '破5日线', isNum(f.close) && isNum(f.m5) ? `上证 ${f.close.toFixed(2)}，MA5 ${f.m5.toFixed(2)}` : '未知'],
@@ -1088,6 +1094,11 @@ function oppHTML(extra = '') {
     else if (e.position === '半仓') items.push(`<span class="o up">情绪 · 情绪主升 龙头 ${esc(a.leader.name)}（${esc(labelBoard(a.leader.board))}）· 半仓，龙头见顶即观望</span>`);
     else items.push(`<span class="o flat">情绪 · 龙头 ${esc(a.leader.name)} ${esc(lt || '已见顶')} · 观望</span>`);
   }
+  // 极限量池（个股层）：只在机构机会出现的阶段并列显示读数，不改变仓位档位
+  if (st === '主升' || st === '反弹') {
+    const c = lvChip(S.lv);
+    items.push(`<span class="o ${c.cls}">${esc(c.text)}</span>`);
+  }
   if (extra && !items.length) return '';   // 手机端只在有机会时显示，替换首卡「按规则」一行
   const sug = extra ? posSugHTML(f) : '';
   return `<div class="opp${items.length ? '' : ' idle'}${extra ? ` ${extra}` : ''}"><b>机会</b>${items.join('') || '<span>暂无机构或情绪机会</span>'}${sug}</div>`;
@@ -1124,6 +1135,7 @@ function footHTML() {
 
 function render() {
   const f = S.result?.final;
+  S.lv = readLimitVolume(S.lvRaw, S.calendar?.date ?? S.seed?.through ?? null);
   const col1 = $('#col1');
   $('#status').innerHTML = statusChips();
   const cs = connState(); $('#conn').className = `conn ${cs.cls}`; $('#conn').innerHTML = `<i aria-hidden="true"></i>${esc(cs.text)}`;

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "imported": false,
+  "asOf": "2026-11-10",
+  "generatedAt": "2026-11-10T16:05:00+08:00",
+  "source": "同花顺 条件选股（极限量）导出，经 tools/limit_volume.py 转换",
+  "params": {
+    "minListDays": 100,
+    "volMult": 5,
+    "minAmtWan": 30
+  },
+  "count": 0,
+  "stocks": [],
+  "note": "尚未导入当日选股结果：按 docs/极限量选股_同花顺公式.md 在同花顺跑公式 → 导出 CSV → 运行 tools/limit_volume.py → 覆盖本文件。页面缺此文件或 count=0 时只显示读数，不参与状态判定。"
+}
