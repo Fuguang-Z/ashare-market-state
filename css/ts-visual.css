@@ -1,0 +1,527 @@
+/* ============================================================================
+   云枢（天枢内嵌）视觉层 · v2026.11.11
+   ----------------------------------------------------------------------------
+   只作用于 html.ts（?embed=tianshu 或被 iframe 嵌入时才有这个类）：
+   独立打开（白底原站）、桌面版「观势」、天枢其他板块都不加载这里的任何规则。
+   配色沿用天枢令牌（--bg/--panel/--line 与天枢 site/style.css 同值），
+   只重排字号、间距、层级、状态标记与细节，不改任何判定与数据逻辑。
+   ============================================================================ */
+
+/* ─────────────────────────── 0. 令牌 ─────────────────────────── */
+html.ts{
+  --ts-radius: 14px;
+  --ts-radius-sm: 9px;
+  --ts-hair: rgba(148, 176, 255, .085);
+  --ts-hair-strong: rgba(148, 176, 255, .16);
+  --ts-sheen: rgba(255, 255, 255, .045);
+  --ts-ink: #eef3fd;
+  --ts-ink-2: #c3cee2;
+  --ts-ink-3: #93a1b9;
+  --ts-ink-4: #7a879f;
+  --ts-glow: 0 1px 0 rgba(255, 255, 255, .045) inset, 0 18px 40px -30px #000;
+  --ts-ease: cubic-bezier(.22, .61, .36, 1);
+  /* 大屏上限收紧一档：卡片里多数文字已按固定字号排，根字号再放大会挤压名称列 */
+  --fs: clamp(12px, 1.5vh, 14px);
+}
+
+/* ─────────────────────────── 1. 画布 ─────────────────────────── */
+html.ts body{
+  background:
+    radial-gradient(1100px 520px at 18% -12%, rgba(79, 140, 255, .16) 0%, transparent 62%),
+    radial-gradient(900px 460px at 92% -18%, rgba(56, 189, 248, .10) 0%, transparent 60%),
+    var(--bg) fixed;
+  font-feature-settings: "tnum" 1, "ss01" 1;
+}
+html.ts .app{gap: 10px; padding: 14px 18px 9px;}
+
+/* 细滚动条：整块看板共用 */
+html.ts *{scrollbar-width: thin; scrollbar-color: #2c3b56 transparent;}
+html.ts ::-webkit-scrollbar{width: 8px; height: 8px;}
+html.ts ::-webkit-scrollbar-thumb{background: #2c3b56; border-radius: 999px; border: 2px solid transparent; background-clip: padding-box;}
+html.ts ::-webkit-scrollbar-thumb:hover{background: #3a4c6d; background-clip: padding-box;}
+html.ts ::-webkit-scrollbar-track{background: transparent;}
+
+/* ─────────────────────────── 2. 顶栏 ─────────────────────────── */
+html.ts .top{
+  border-bottom: 1px solid var(--ts-hair);
+  padding-bottom: 13px;
+  gap: 14px;
+}
+html.ts .logo{
+  width: 34px; height: 34px; border-radius: 10px;
+  background: linear-gradient(150deg, #5b95ff 0%, #38bdf8 100%);
+  box-shadow: 0 8px 20px -12px #4f8cff, 0 0 0 1px rgba(255, 255, 255, .12) inset;
+}
+html.ts .logo svg{width: 21px; height: 21px;}
+html.ts .brand{gap: 10px;}
+html.ts .brand h1{font-size: 18px; font-weight: 700; letter-spacing: .02em; color: var(--ts-ink);}
+html.ts .brand-sub{font-size: 8.5px; letter-spacing: .24em; color: var(--ts-ink-4); margin-top: 3px;}
+
+html.ts .chip{
+  font-size: 11px; line-height: 1.6; color: var(--ts-ink-3);
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid var(--ts-hair);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+html.ts .chip b{color: var(--ts-ink); font-weight: 600;}
+html.ts .chip.warn{color: #f5c46a; background: rgba(245, 183, 60, .10); border-color: rgba(245, 183, 60, .28);}
+html.ts .chip.err{color: #ff8b96; background: rgba(240, 82, 97, .10); border-color: rgba(240, 82, 97, .28);}
+
+html.ts .conn{
+  font-size: 11px; font-weight: 600; letter-spacing: .01em;
+  padding: 5px 11px; border: 1px solid currentColor; border-radius: 999px;
+}
+html.ts .conn i{width: 6px; height: 6px;}
+html.ts .conn.ok{color: #34d399; background: rgba(52, 211, 153, .09); border-color: rgba(52, 211, 153, .30);}
+html.ts .conn.lag{color: #f5b73c; background: rgba(245, 183, 60, .09); border-color: rgba(245, 183, 60, .30);}
+html.ts .conn.bad{color: #ff6b78; background: rgba(240, 82, 97, .10); border-color: rgba(240, 82, 97, .30);}
+html.ts .conn.off{color: var(--ts-ink-3); background: rgba(255, 255, 255, .04); border-color: var(--ts-hair-strong);}
+
+html.ts #alert-btn{
+  min-height: 33px; padding: 0 15px;
+  font-size: 12px; font-weight: 600; letter-spacing: .02em;
+  color: #eaf3ff;
+  background: linear-gradient(180deg, rgba(79, 140, 255, .28), rgba(79, 140, 255, .14));
+  border: 1px solid rgba(122, 173, 255, .55);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px -18px #4f8cff, 0 1px 0 rgba(255, 255, 255, .10) inset;
+  transition: background .18s var(--ts-ease), border-color .18s var(--ts-ease), transform .18s var(--ts-ease);
+}
+html.ts #alert-btn:hover{background: linear-gradient(180deg, rgba(79, 140, 255, .40), rgba(79, 140, 255, .20)); border-color: rgba(150, 192, 255, .8);}
+html.ts #alert-btn:active{transform: translateY(1px);}
+html.ts #alert-btn[aria-pressed="true"]{background: linear-gradient(180deg, #3f7cf5, #2f63d8); border-color: #6ea2ff; color: #fff;}
+
+/* ─────────────────────────── 3. 卡片外壳 ─────────────────────────── */
+html.ts .card{
+  border: 1px solid var(--ts-hair);
+  border-radius: var(--ts-radius);
+  background: linear-gradient(180deg, #162032 0%, #121a29 46%, #111827 100%);
+  box-shadow: var(--ts-glow);
+  padding: 14px 16px;
+  flex: 1 0 auto;                  /* 有空间时撑满一列，空间不足时按内容高度、由整列滚动，不再压扁卡片 */
+}
+html.ts .card h3{
+  font-size: 14px; font-weight: 650; letter-spacing: .01em;
+  color: var(--ts-ink); line-height: 1.3;
+  gap: 9px; margin-bottom: 10px;
+}
+html.ts .section-no{
+  width: 23px; height: 21px; flex: none;
+  display: inline-grid; place-items: center;
+  font: 600 10px/1 var(--mono); letter-spacing: .02em;
+  color: #9dc0ff; padding: 0;
+  background: rgba(79, 140, 255, .13);
+  border: 1px solid rgba(79, 140, 255, .20);
+  border-radius: 7px;
+}
+html.ts .condition-card > h3 > .cnt{
+  font: 500 11px/1.45 var(--mono); letter-spacing: 0;
+  color: var(--ts-ink-3);
+}
+@media (min-width: 861px){
+  html.ts .condition-card > h3 > .cnt{
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--ts-hair);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+}
+html.ts .condition-card > h3 > .cnt b{color: var(--ts-ink); font-size: 11.5px;}
+html.ts .card > h3 > .cnt{color: var(--ts-ink-3);}
+
+/* ─────────────────────────── 4. 阶段主卡 ─────────────────────────── */
+html.ts .hero{
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-top: 0;
+  border-radius: 16px;
+  padding: 14px 17px 12px;
+  flex: 0 0 auto;
+  background:
+    linear-gradient(158deg, color-mix(in srgb, var(--tone) 14%, #182233) 0%, #141d2d 46%, #111827 100%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tone) 12%, transparent),
+    0 26px 60px -44px color-mix(in srgb, var(--tone) 60%, #000),
+    0 1px 0 rgba(255, 255, 255, .05) inset;
+  animation: none;                 /* 原「呼吸」外发光在深色页上过于抢眼，改为静态描边 */
+}
+html.ts .hero::before{
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(90deg, var(--tone) 0%, color-mix(in srgb, var(--tone) 45%, transparent) 38%, transparent 82%);
+}
+html.ts .hero-heading{
+  font-size: 10.5px; letter-spacing: .04em; color: var(--ts-ink-3);
+  gap: 7px; margin-bottom: 9px;
+}
+html.ts .hero-heading .eyebrow{font-size: 8.5px; letter-spacing: .20em; color: var(--ts-ink-4);}
+html.ts .hero .state-dot{
+  width: 6px; height: 6px; border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+}
+html.ts .hero-top{align-items: flex-end;}
+html.ts .stage{
+  font-size: clamp(40px, 5.4vh, 56px);
+  font-weight: 800; letter-spacing: .02em; line-height: 1;
+  color: var(--tone);
+  text-shadow: 0 10px 44px color-mix(in srgb, var(--tone) 38%, transparent);
+}
+html.ts .position-block{gap: 5px;}
+html.ts .position-label{font-size: 9.5px; letter-spacing: .14em; color: var(--ts-ink-4);}
+html.ts .pos{
+  font: 700 13px/1 var(--mono); letter-spacing: .02em;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tone) 48%, transparent);
+  border-radius: 999px;
+  padding: 7px 13px;
+}
+html.ts .sub{font-size: 11.5px; line-height: 1.55; color: var(--ts-ink-2); margin: 9px 0 7px;}
+html.ts .act{font-size: 12.5px; font-weight: 650; color: var(--ts-ink);}
+html.ts .pos-sug{
+  margin-left: 9px; padding: 2px 9px;
+  font-size: 11.5px; font-weight: 600;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  border-color: color-mix(in srgb, var(--tone) 45%, transparent);
+}
+html.ts .pos-sug b{font-size: 12px;}
+
+/* KPI 三联 */
+html.ts .kpis{
+  margin-top: 11px; padding-top: 10px;
+  border-top: 1px solid var(--ts-hair);
+  gap: 0;
+}
+html.ts .kpi{padding: 0 12px; border-right: 1px solid var(--ts-hair); min-width: 0;}
+html.ts .kpi:first-child{padding-left: 0;}
+html.ts .kpi:last-child{padding-right: 0; border-right: 0;}
+html.ts .kpi > span{
+  font-size: 9.5px; letter-spacing: .10em; color: var(--ts-ink-4);
+  margin-bottom: 6px;
+}
+html.ts .kpi b{
+  display: block;
+  font: 650 clamp(18px, 2.2vh, 23px)/1.15 var(--mono);
+  letter-spacing: -.02em; color: var(--ts-ink);
+  white-space: nowrap;
+}
+html.ts .kpi b small{
+  display: block; margin-top: 3px;
+  font: 500 11px/1.2 var(--mono); letter-spacing: 0;
+}
+html.ts .kpi b.g{color: #34d399;}
+html.ts .kpi-note{font-size: 9.5px; color: var(--ts-ink-4); margin-top: 4px;}
+
+/* 四阶段进度 */
+html.ts .steps{gap: 5px; margin-top: 11px;}
+html.ts .steps i{height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .075);}
+html.ts .steps i.on{
+  background: var(--tone);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--tone) 45%, transparent);
+}
+html.ts .steps-lab{font-size: 9.5px; color: var(--ts-ink-4); margin-top: 6px; letter-spacing: .02em;}
+html.ts .tent{
+  margin-top: 11px; padding: 7px 10px;
+  font-size: 11px; line-height: 1.5;
+  color: #f3c26a; background: rgba(245, 183, 60, .08);
+  border-left: 2px solid rgba(245, 183, 60, .65);
+  border-radius: 4px;
+}
+
+/* ─────────────────────────── 5. 判定条件 ─────────────────────────── */
+html.ts .condition-card .ci{
+  grid-template-columns: 19px minmax(0, 1fr);
+  column-gap: 9px; row-gap: 1px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(148, 176, 255, .07);
+  transition: background .16s var(--ts-ease);
+}
+html.ts .condition-card .ci:first-child{border-top: 0;}
+html.ts .condition-card .ci:hover{background: rgba(148, 176, 255, .035);}
+html.ts .condition-card .ic{
+  width: 17px; height: 17px; border-radius: 50%;
+  font: 700 10px/1 var(--sans);
+  margin-top: 1px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+html.ts .ic.y{
+  color: #071019;
+  background: #4fd1ff;
+  border-color: #4fd1ff;
+  box-shadow: 0 0 0 3px rgba(79, 209, 255, .10);
+}
+html.ts .ic.n{
+  color: #66748d;
+  background: transparent;
+  border-color: transparent;
+}
+html.ts .ic.u{
+  color: #f5b73c;
+  background: rgba(245, 183, 60, .10);
+  border-color: rgba(245, 183, 60, .34);
+}
+html.ts .condition-card .lab{font-size: 12.3px; line-height: 1.42; color: #b9c5d9;}
+html.ts .ci.y .full{color: var(--ts-ink); font-weight: 600;}
+html.ts .condition-card .rd{
+  font-size: 10.8px; line-height: 1.45; color: var(--ts-ink-3);
+}
+html.ts .condition-card .ci:not(.y) .lab{color: #9fadc4;}
+html.ts .condition-card .ci:not(.y) .rd{color: var(--ts-ink-4);}
+/* 「仅在主升状态检查」在标题里已有一句，行内不再重复 5 次（手机端标题不显示此说明，行内保留） */
+@media (min-width: 861px){
+  html.ts .condition-card.idle .rd{display: none;}
+  html.ts .condition-card.idle .lab{color: #97a5bc;}
+}
+html.ts .condition-card .idle-note{font-size: 10px; color: var(--ts-ink-4); font-weight: 400;}
+html.ts .condition-card .gate-note{font-size: 10px; color: var(--ts-ink-4); font-weight: 400;}
+/* 高一些的列：条件行均分剩余高度，不留大片空白 */
+@media (min-width: 1181px){
+  html.ts .c3 > .condition-card .cl{justify-content: space-evenly;}
+  /* 共振条件 8 条：两栏排布，把中间列压回一屏（内容与顺序不变，只换列） */
+  html.ts .c2 > .condition-card[data-group="res"] .cl{
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 18px; align-content: space-evenly;
+  }
+  /* 同一行两格：保持「标签在上、读数紧随」，行高由高的一格决定 */
+  html.ts .c2 > .condition-card[data-group="res"] .ci{padding: 5px 0;}
+  html.ts .c2 > .condition-card[data-group="res"] .ci:nth-child(2){border-top: 0;}
+}
+
+/* ─────────────────────────── 6. 板块 / 外围 / 表格 ─────────────────────────── */
+html.ts .bd{
+  padding: 10px 0;
+  border-top: 1px solid rgba(148, 176, 255, .07);
+  gap: 4px 12px;
+  align-items: center;
+}
+html.ts .bd:first-of-type{border-top: 0; padding-top: 2px;}
+html.ts .bd .nm{font-size: 14px; font-weight: 650; color: var(--ts-ink); letter-spacing: .01em;}
+html.ts .bd .tag{
+  font-size: 9.5px; letter-spacing: .04em; color: var(--ts-ink-3);
+  background: rgba(148, 176, 255, .09);
+  border-radius: 999px; padding: 1px 7px; margin-left: 7px;
+}
+html.ts .bd .v{font: 600 12.5px/1.5 var(--mono); letter-spacing: -.01em;}
+html.ts .bd .v small{font-size: 9.5px; color: var(--ts-ink-4); margin-right: 4px;}
+html.ts .bd .etf{font-size: 9.5px; color: var(--ts-ink-4); line-height: 1.5;}
+html.ts .bd .kspark{opacity: .92;}
+
+html.ts .os-card h3 .cnt{font-size: 9.5px; line-height: 1.45; color: var(--ts-ink-4); letter-spacing: .01em;}
+html.ts .os{padding: 3px 0; gap: 7px; border-top: 1px solid rgba(148, 176, 255, .07);}
+html.ts .os .nm{font-size: 12px; font-weight: 600; color: var(--ts-ink-2);}
+html.ts .os .pc{font: 600 11.5px/1.4 var(--mono); letter-spacing: -.01em;}
+html.ts .os .kspark{opacity: .9;}
+
+html.ts .mini th{
+  font-size: 9.5px; font-weight: 500; letter-spacing: .08em;
+  color: var(--ts-ink-4);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--ts-hair-strong);
+}
+html.ts .mini td{
+  font-size: 11.5px; line-height: 1.45;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(148, 176, 255, .055);
+}
+html.ts .mini tbody tr:hover{background: rgba(79, 140, 255, .055);}
+html.ts .mini td small{font-size: 9.5px; color: var(--ts-ink-4);}
+html.ts .note{font-size: 9.5px; color: var(--ts-ink-4); line-height: 1.5;}
+
+html.ts .state-card > .muted,
+html.ts .state-card > p.muted{color: var(--ts-ink-3); font-size: 11.5px; line-height: 1.6;}
+/* 空状态卡：虚线占位框内居中说明，避免大片留白显得「没做完」 */
+html.ts .c1 > .state-card > .panel-scroll{
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  margin-top: 2px; padding: 10px 12px;
+  border: 1px dashed rgba(148, 176, 255, .14);
+  border-radius: 10px;
+  background: rgba(148, 176, 255, .022);
+}
+html.ts .c1 > .state-card .state-status{
+  margin: 0; text-align: center;
+  font-size: 12.5px; color: var(--ts-ink-2);
+}
+html.ts .c1 > .state-card .note{margin: 0; text-align: center; font-size: 10px;}
+
+/* ─────────────────────────── 7. 提醒与切换 ─────────────────────────── */
+html.ts .log-card > h3{border-bottom: 0; padding-bottom: 0;}
+html.ts .log-top{padding-top: 2px;}
+html.ts .log{font-size: 11.5px;}
+html.ts .log li{padding: 6px 0; border-top: 1px solid rgba(148, 176, 255, .07);}
+html.ts .log time{font-size: 10.5px; color: var(--ts-ink-4);}
+html.ts .now-tag{font-size: 11.5px; color: var(--ts-ink-3); line-height: 1.5;}
+html.ts .now-tag b{color: var(--ts-ink); font-weight: 650;}
+html.ts .stop-tag{
+  color: #06121a; background: #34d399;
+  border-radius: 5px; padding: 1px 6px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .02em;
+}
+html.ts .stop-tag.ok{background: #ff6b78;}
+html.ts .opp{font-size: 11px; gap: 3px 7px; padding: 3px 0 5px;}
+html.ts .opp > b{font-size: 10px; letter-spacing: .08em; color: var(--ts-ink-4); font-weight: 600;}
+html.ts .opp .o.up{color: #ff6b78;}
+html.ts .opp .o.down{color: #34d399;}
+
+html.ts .log.hot li{
+  border-left: 3px solid rgba(245, 183, 60, .85) !important;
+  background: rgba(245, 183, 60, .075);
+  border-radius: 8px;
+  padding: 6px 9px !important;
+}
+html.ts .log.hot li .lv{border-radius: 4px; padding: 0 5px; font-size: 10px;}
+html.ts .log.hot li.lv-ok{border-left-color: rgba(255, 107, 120, .85) !important; background: rgba(255, 107, 120, .075);}
+html.ts .log-top .log{padding-bottom: 6px; border-bottom: 1px solid rgba(148, 176, 255, .07);}
+
+html.ts .tl2{gap: 14px; margin-top: 8px;}
+html.ts .tl2 h4{font-size: 9.5px; letter-spacing: .10em; color: var(--ts-ink-4); font-weight: 600;}
+html.ts .log.tl li{
+  border-left: 2px solid rgba(148, 176, 255, .18);
+  border-top: 0;
+  padding: 3px 0 3px 9px;
+}
+html.ts .log.tl li.up{border-left-color: rgba(255, 107, 120, .75);}
+html.ts .log.tl li.down{border-left-color: rgba(52, 211, 153, .75);}
+html.ts .log.tl li.emo{border-left-color: rgba(167, 139, 250, .75);}
+html.ts .log.tl li.rebound{border-left-color: rgba(245, 183, 60, .8); background: rgba(245, 183, 60, .07);}
+html.ts .log.tl time{font-size: 10px; color: var(--ts-ink-4);}
+html.ts .log.tl .st{font-size: 11.5px;}
+html.ts .log.tl small{font-size: 10px; color: var(--ts-ink-4);}
+html.ts .emo-line{
+  margin-top: 8px; padding: 5px 9px;
+  border-left: 2px solid rgba(167, 139, 250, .5);
+  background: rgba(167, 139, 250, .07);
+  border-radius: 4px;
+  font-size: 10.5px;
+}
+
+/* ─────────────────────────── 8. 页脚 ─────────────────────────── */
+html.ts .foot{
+  font-size: 10px; letter-spacing: .01em; color: #6f7d96;
+  border-top: 1px solid var(--ts-hair);
+  padding-top: 9px;
+}
+html.ts .foot .ver{color: var(--ts-ink-3); font-size: 10px; border-right-color: var(--ts-hair-strong);}
+html.ts .foot b{color: var(--ts-ink-3); font-weight: 500;}
+html.ts .foot .disc{color: #78859e; font-size: 9px;}
+
+/* ─────────────────────────── 9. 一屏与滚动 ─────────────────────────── */
+/* 三列各自成滚动区：内容放得下时不出滚动条；放不下时按内容高度排、整列滚动，
+   不再把卡片压扁后裁掉「机会 / 参考」等行（原 1400×900 下 00 卡只剩 32px）。 */
+@media (min-width: 861px){
+  html.ts .col{overflow-y: auto; overscroll-behavior: contain;}
+  html.ts .c2 > .log-card{overflow: visible; flex: 1 0 auto;}
+  html.ts .c2 > .log-card .tl2{height: auto; min-height: 52px; flex: 1 1 52px; overflow: hidden;}
+}
+/* 内容被滚动截断处加一层很短的渐隐，避免「半行字」直接切断 */
+html.ts .c1 .panel-scroll{
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 8px), transparent);
+          mask-image: linear-gradient(#000 calc(100% - 8px), transparent);
+}
+html.ts .c2 > .log-card .log.tl{
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 10px), transparent);
+          mask-image: linear-gradient(#000 calc(100% - 10px), transparent);
+}
+/* 时间线每条压成一行，短高度里也能看整行，不再留下半截字（中屏两栏时间线仍换行） */
+@media (min-width: 1181px){
+  html.ts .c2 > .log-card .log.tl li{
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  html.ts .c2 > .log-card .log.tl time{display: inline; margin-right: 7px;}
+  html.ts .c2 > .log-card .log.tl .event{display: inline;}
+}
+@media (min-width: 861px){
+  html.ts .log.tl .event{
+    display: block; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+}
+/* 00 卡压一点留白，把中间列收回一屏 */
+@media (min-width: 1181px){
+  html.ts .c2 > .log-card > h3{margin-bottom: 8px;}
+  html.ts .c2 > .log-card .log-top{padding-top: 0;}
+  html.ts .c2 > .log-card .log-top .log{padding-bottom: 4px;}
+  html.ts .c2 > .log-card .opp{padding: 1px 0 3px;}
+  html.ts .c2 > .log-card .tl2{margin-top: 5px;}
+  html.ts .c2 > .log-card .log.tl li{padding: 1px 0 1px 9px; line-height: 1.3;}
+}
+/* 列内滚动：放得下时不出滚动条，也不预留空隙 */
+html.ts .col{padding-right: 0;}
+@media (max-width: 860px){
+  html.ts .col{padding-right: 0;}
+}
+
+/* ─────────────────────────── 10. 宽屏（≥1501）：板块卡名称列放宽，不再出现「半导体…」 ─────────────────────────── */
+@media (min-width: 1501px){
+  html.ts .c1{grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr);}
+  html.ts .c1 > .board-card .bd{gap: 3px 7px;}
+}
+
+/* ─────────────────────────── 11. 中屏 861–1180：沿用基础的字号密度 ─────────────────────────── */
+@media (min-width: 861px) and (max-width: 1180px){
+  html.ts .card h3{font-size: 12.5px; gap: 6px;}
+  html.ts .bd .nm{font-size: 12px;}
+  html.ts .bd .tag{font-size: 9px;}
+  html.ts .bd .v{font-size: 11px;}
+  html.ts .os .nm{font-size: 11px;}
+  html.ts .os .pc{font-size: 10.5px;}
+  html.ts .condition-card .lab{font-size: 11px;}
+  html.ts .condition-card .rd{font-size: 9.8px;}
+  html.ts .mini th{font-size: 9px;}
+  html.ts .mini td{font-size: 10.5px;}
+  html.ts .log{font-size: 10.5px;}
+  /* 00 卡标题右侧的「现状」较长，中屏用纯文字，不做成气泡 */
+  html.ts .log-card > h3 > .cnt{
+    background: none; border: 0; padding: 0;
+    font-size: 10px; color: var(--ts-ink-3);
+  }
+  html.ts .c1 > .state-card > .panel-scroll{padding: 8px 10px;}
+}
+
+/* ─────────────────────────── 11. 短屏（云枢内嵌约 780 高）压缩 ─────────────────────────── */
+@media (min-width: 1181px) and (max-height: 840px){
+  html.ts .app{padding-top: 12px; gap: 8px;}
+  html.ts .top{padding-bottom: 9px;}
+  html.ts .logo{width: 30px; height: 30px; border-radius: 9px;}
+  html.ts .logo svg{width: 19px; height: 19px;}
+  html.ts .brand-sub{display: none;}
+  html.ts .card{padding: 12px 15px;}
+  html.ts .hero{padding: 12px 16px 11px;}
+  html.ts .hero-heading{margin-bottom: 7px;}
+  html.ts .stage{font-size: 46px;}
+  html.ts .sub{margin: 8px 0 6px;}
+  html.ts .kpis{margin-top: 9px; padding-top: 9px;}
+  html.ts .kpi b{font-size: 21px;}
+  html.ts .steps{margin-top: 9px;}
+  html.ts .condition-card .ci{padding: 5px 0;}
+  html.ts .condition-card .lab{font-size: 11.9px;}
+  html.ts .condition-card .rd{font-size: 10.3px;}
+  html.ts .c2 > .log-card .tl2{display: none;}   /* 34px 只够露出半行，短屏下整段时间线收起，标题保留「70 段」摘要 */
+  html.ts .c2 > .condition-card[data-group="res"] .ci{padding: 4px 0;}
+  html.ts .bd{padding: 8px 0;}
+  html.ts .foot{padding-top: 6px;}
+}
+/* ─────────────────────────── 12. 手机（≤860）微调 ─────────────────────────── */
+@media (max-width: 860px){
+  html.ts .app{padding: 12px 12px calc(10px + env(safe-area-inset-bottom)); gap: 8px;}
+  html.ts .card{padding: 12px 13px; border-radius: 12px;}
+  html.ts .card h3{font-size: 13px; gap: 7px; margin-bottom: 9px;}
+  html.ts .section-no{width: 20px; height: 19px; font-size: 9px; border-radius: 6px;}
+  html.ts .hero{padding: 14px 14px 12px;}
+  html.ts .stage{font-size: 40px;}
+  html.ts .kpi{padding: 0 7px;}
+  html.ts .kpi b{font-size: 17px; white-space: nowrap;}
+  html.ts .kpi b small{font-size: 9.5px;}
+  html.ts .kpi > span{letter-spacing: .04em;}
+  html.ts .condition-card .ci{padding: 7px 0; column-gap: 8px;}
+  html.ts .condition-card .lab{font-size: 12px;}
+  html.ts .condition-card .rd{font-size: 11px;}
+  html.ts .log.hot li{font-size: 11px;}
+  /* 顶栏在 375 宽要放得下：品牌 + 行情状态 + 提醒按钮 */
+  html.ts .conn{font-size: 10px; padding: 4px 8px;}
+  html.ts #alert-btn{font-size: 11px; padding: 0 11px; min-height: 30px; border-radius: 9px;}
+  /* 手机不受桌面「一屏」约束：整页自然滚动，表格不再渐隐 */
+  html.ts .c1 .panel-scroll{-webkit-mask-image: none; mask-image: none;}
+}
