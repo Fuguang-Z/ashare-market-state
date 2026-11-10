@@ -662,7 +662,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.11.10a';
+const APP_VERSION = '2026.11.10c';
 const STAGE_META = {
   '主升': { cls: 'up', name: '主升', sub: '主线板块与指数共振' },
   '反弹': { cls: 'rebound', name: '反弹', sub: '三大指数达到反弹门槛' },
@@ -877,7 +877,7 @@ function heroHTML(f) {
 }
 /** 迷你 K 线（SVG）：红涨绿跌，细线为 5 日均线；盘中未收定的一根画成虚线空心。bars 含前置的 5 日线计算根。 */
 function sparkK(all, w = 76, h = 22) {
-  if (!all?.length) return `<span class="kspark empty" style="width:${w}px" title="K 线暂缺">—</span>`;
+  if (!all?.length) return `<span class="kspark empty" style="max-width:100%;width:${w}px" title="K 线暂缺">—</span>`;
   const bars = all.slice(-CHART_BARS), off = all.length - bars.length;
   const ma = bars.map((_, i) => { const k = off + i; return k >= 4 ? all.slice(k - 4, k + 1).reduce((a, b) => a + b.c, 0) / 5 : null; });
   const hi = Math.max(...bars.map(b => b.h), ...ma.filter(isNum)), lo = Math.min(...bars.map(b => b.l), ...ma.filter(isNum)), span = hi - lo || 1;
@@ -940,21 +940,33 @@ function boardsHTML(f) {
     ${b.etf ? `<div class="etf" title="跟踪 ${esc(b.etf.index)}；按截至 ${esc(b.etf.asOf)} 的 20 日成交额选取">ETF：${esc(b.etf.name)}（${esc(b.etf.code)}）· ${esc(b.etf.index)}</div>` : ''}</div>`).join('');
   return `<section class="card board-card"><h3>${mb.role}<span class="cnt mid-hide">${esc(mb.note ?? '最多 2 个')}</span><span class="cnt mid-only">${mb.since ? '今日 · 主跌以来 · 5日' : '今日 · 5日'}</span></h3>${rows || '<p class="muted">无主线：未出现集体走强且与指数同步的板块</p>'}${overseasInline()}</section>`;
 }
-/** 左列下部：板块强弱和阶段卡共用剩余空间，桌面表格分别滚动，手机随整页滚动。 */
+/** 左列下部：桌面表格分别滚动，手机默认预览首行，可展开完整列表。 */
 function extraHTML(f) {
   return sectorHTML(f) + stateCardHTML(f);
 }
+function marketPanel(key, title, note, body, classes) {
+  const open = S.xp?.[key] === true, id = `market-${key}`;
+  return `<section class="card ${classes}${open ? ' panel-open' : ''}">
+    <h3>${title}${note ? `<span class="cnt">${note}</span>` : ''}<button type="button" class="panel-toggle" data-xp="${key}" aria-controls="${id}" aria-expanded="${open}" aria-label="${open ? '收起' : '展开'}${title}明细">${open ? '收起' : '展开'}</button></h3>
+    <div id="${id}" class="panel-scroll" tabindex="0" role="region" aria-label="${title}明细">${body}</div>
+  </section>`;
+}
 function stateCardHTML(f) {
-  if ((f.state === '主升' || S.emo?.active) && S.today.top?.ok) {
-    const lg = S.today.top.rows.filter(x => isNum(x.pct) && x.pct >= 3).slice(0, 6);
-    return `<section class="card state-card desk-only"><h3>领涨集团<span class="cnt">成交额前20 · 涨幅≥3%</span></h3><div class="panel-scroll" tabindex="0" role="region" aria-label="领涨集团明细">${lg.length ? `<table class="mini"><thead><tr><th>名称</th><th>涨幅</th><th>成交额</th></tr></thead><tbody>${lg.map(x => `<tr><td>${esc(x.name)}</td><td class="r">${fmtPct(x.pct)}</td><td>${fmtYi(x.amount)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">暂无满足条件的个股</p>'}<p class="note">仅展示客观行情，不构成投资建议</p></div></section>`;
+  const top = S.today.top;
+  if (f.state === '主升' || (S.emo?.active && top?.ok)) {
+    const lg = top?.ok ? top.rows.filter(x => isNum(x.pct) && x.pct >= 3).slice(0, 6) : [];
+    const body = lg.length ? `<table class="mini"><thead><tr><th>名称</th><th>涨幅</th><th>成交额</th></tr></thead><tbody>${lg.map(x => `<tr><td>${esc(x.name)}</td><td class="r">${fmtPct(x.pct)}</td><td>${fmtYi(x.amount)}</td></tr>`).join('')}</tbody></table><p class="note">仅展示客观行情，不构成投资建议</p>`
+      : `<p class="muted">${top?.ok ? '暂无满足条件的个股' : '领涨行情待取得'}</p>`;
+    return marketPanel('stage', '领涨集团', '成交额前20 · 涨幅≥3%', body, 'state-card desk-only');
   }
   if (middleStage(f.state)) {
     const H = S.result.H, lowNow = H.sh.low.at(-1), prev = H.sh.low.slice(-21, -1).filter(isNum);
     const rebound = S.result.todayAppended && isNum(lowNow) && prev.length && lowNow <= Math.min(...prev) * 1.003 && f.close >= lowNow * 1.005;
     const w = S.today.wide;
-    return `<section class="card state-card desk-only"><h3>小仓套利</h3><div class="panel-scroll" tabindex="0" role="region" aria-label="小仓套利明细"><p class="muted">${rebound ? '指数破位后被拉回：按规则可小仓博宽基 ETF 回拉，空间有限' : '暂无指数破位拉回机会'}</p>
-      ${w?.ok ? `<table class="mini"><thead><tr><th>宽幅候选</th><th>振幅</th><th>20日均</th><th>堆量</th><th>反包</th></tr></thead><tbody>${w.rows.slice(0, 5).map(x => `<tr><td>${esc(x.name)}</td><td>${x.currentAmplitudePct.toFixed(1)}%</td><td>${x.averageAmplitude20Pct.toFixed(1)}%</td><td>${x.accumulationRatio.toFixed(2)}</td><td>${x.reversalCount20}</td></tr>`).join('')}</tbody></table><p class="note">只列客观数据，约每 5 分钟更新</p>` : '<p class="note">宽幅震荡候选约每 5 分钟扫描一次</p>'}</div></section>`;
+    const status = `<p class="muted state-status">${rebound ? '指数破位后被拉回：按规则可小仓博宽基 ETF 回拉，空间有限' : '暂无指数破位拉回机会'}</p>`;
+    const body = w?.ok && w.rows.length ? `<table class="mini wide-table"><thead><tr><th>候选</th><th>振幅</th><th>20日均</th><th>堆量</th><th>反包</th></tr></thead><tbody>${w.rows.slice(0, 5).map(x => `<tr><td>${esc(x.name)}</td><td>${x.currentAmplitudePct.toFixed(1)}%</td><td>${x.averageAmplitude20Pct.toFixed(1)}%</td><td>${x.accumulationRatio.toFixed(2)}</td><td>${x.reversalCount20}</td></tr>`).join('')}</tbody></table>${status}<p class="note">只列客观数据，约每 5 分钟更新</p>`
+      : `${status}<p class="note">宽幅震荡候选约每 5 分钟扫描一次</p>`;
+    return marketPanel('stage', '小仓套利', '', body, 'state-card desk-only');
   }
   return '';
 }
@@ -978,23 +990,22 @@ function sectorHTML(f) {
   // 排序：点表头切换（今日 / 近5日，大→小 / 小→大），选择记在本机
   const fs = load('famSort', { k: 'f5', d: -1 }), key = fs.k === 'fT' ? 'p1' : 'p5';
   rows.sort((a, b) => (isNum(a[key]) ? 0 : 1) - (isNum(b[key]) ? 0 : 1) || fs.d * ((a[key] ?? 0) - (b[key] ?? 0)));
-  const byP5 = [...rows].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
   const th = (k, label) => `<th><button type="button" class="sort${fs.k === k ? '' : ' off'}" data-sort="${k}" title="点击按${label}排序：${fs.k === k && fs.d === -1 ? '改为从小到大' : '从大到小'}">${label}<span class="ar">${fs.k === k ? (fs.d === -1 ? '↓' : '↑') : '↕'}</span></button></th>`;
   const head = j < H.dates.length - 1 || partial ? `截至 ${esc(H.dates[j].slice(5))} · 今日板块 ${tb}/${ALL_BOARDS.length}` : `${rows.length} 个板块 · 按${fs.k === 'fT' ? '今日' : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}`;
   const isToday = H.dates[j] === S.calendar?.date;
   const dayLabel = isToday ? '今日' : H.dates[j].slice(5);
   const sec = sectorRows(j, fs, isToday);
   if (sec.length) {
-    const hb = [...sec].filter(r => isNum(r.p5)).sort((a, b) => b.p5 - a.p5);
     const asOf = isToday ? (partial ? `今日 · 轮询中 ${tb}/${ALL_BOARDS.length}` : '今日') : `截至 ${esc(H.dates[j].slice(5))}`;
     const td = (v, d = 2, wait = false) => `<td class="${sign(v)}"${wait && !isNum(v) ? ' title="今日数据轮询中"' : ''}>${wait && !isNum(v) ? '…' : fmtPct(v, d)}</td>`;
     const body = sec.map(r => `<tr class="sec${r.hotToday ? ' hot' : ''}" title="${esc(r.title)}"><td>${esc(r.name)}${r.pref ? ' <small class="muted">偏好不参与</small>' : ''}${r.hotToday ? ` <small class="hot-tag">今日热点 ×${r.hotToday}</small>` : r.hotRecent ? ` <small class="muted">近期热点 ${esc(r.hotRecent)}</small>` : ''}</td>${td(r.p1, 2, isToday)}${td(r.p5, 1, isToday)}</tr>`
       + (r.branches ?? []).map(b => `<tr class="br"><td>└ ${esc(b.name)}</td>${td(b.p1, 2, isToday)}${td(b.p5, 1, isToday)}</tr>`).join('')).join('');
-    return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${sec.length} 个大类 · ${asOf} · 按${fs.k === 'fT' ? dayLabel : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}</span></h3><div class="panel-scroll" tabindex="0" role="region" aria-label="板块强弱明细"><table class="mini sec-table"><thead><tr><th>板块</th>${th('fT', dayLabel)}${th('f5', '近5日')}</tr></thead><tbody>${body}</tbody></table></div>
-    <div class="fam-line mob-only"><p><b>强</b>${hb.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${hb.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
+    const note = `${sec.length} 个大类 · ${asOf} · 按${fs.k === 'fT' ? dayLabel : '近 5 日'}${fs.d === -1 ? '从大到小' : '从小到大'}`;
+    const table = `<table class="mini sec-table"><thead><tr><th>板块</th>${th('fT', dayLabel)}${th('f5', '近5日')}</tr></thead><tbody>${body}</tbody></table>`;
+    return marketPanel('sector', '板块强弱', note, table, 'fill desk-only mob-extra');
   }
-  return `<section class="card fill desk-only mob-extra"><h3>板块强弱<span class="cnt">${head}</span></h3><div class="panel-scroll" tabindex="0" role="region" aria-label="板块强弱明细"><table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="fam-line mob-only"><p><b>强</b>${byP5.slice(0, 2).map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p><p><b>弱</b>${byP5.slice(-2).reverse().map(r => `${esc(r.name)} <span class="num ${sign(r.p5)}">${fmtPct(r.p5, 1)}</span>`).join('　')}</p></div></section>`;
+  const table = `<table class="mini"><thead><tr><th>板块</th>${th('fT', '今日')}${th('f5', '近5日')}</tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.name)} <small class="muted">${esc(FAMILY_LABEL[r.fam] ?? r.fam ?? '')}${PREFERENCE_EXCLUDED.includes(r.fam) ? ' · 偏好不参与' : ''}</small></td><td class="${sign(r.p1)}">${fmtPct(r.p1)}</td><td class="${sign(r.p5)}">${fmtPct(r.p5, 1)}</td></tr>`).join('')}</tbody></table>`;
+  return marketPanel('sector', '板块强弱', head, table, 'fill desk-only mob-extra');
 }
 function segTag(g) {
   const parts = [];
@@ -1123,10 +1134,12 @@ function render() {
   }
   const groups = condGroups(f), G = Object.fromEntries(groups.map(g => [g.key, g]));
   const active = document.activeElement;
+  const panelToggle = active?.matches('.panel-toggle') ? active.dataset.xp : null;
   const panels = new Map(Array.from(col1.querySelectorAll('.panel-scroll'), panel => [
     panel.getAttribute('aria-label'), { left: panel.scrollLeft, top: panel.scrollTop, focus: panel.contains(active) },
   ]));
   col1.innerHTML = heroHTML(f) + boardsHTML(f) + overseasHTML() + mobileConds(groups) + extraHTML(f);
+  if (panelToggle) col1.querySelector(`.panel-toggle[data-xp="${CSS.escape(panelToggle)}"]`)?.focus({ preventScroll: true });
   for (const panel of col1.querySelectorAll('.panel-scroll')) {
     const old = panels.get(panel.getAttribute('aria-label'));
     if (!old) continue;

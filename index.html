@@ -13,7 +13,7 @@ try{window.__pre={};for(const n of['market_seed.json','regime_timeline.json','ov
 <style>
 :root{color-scheme:light;--bg:#fff;--panel:#fff;--panel2:#f5f7f9;--line:#e2e7eb;--line2:#cbd3da;--ink:#14242f;--fg:#243641;--fg2:#465966;--muted:#5d6f7b;--navy:#162e3d;--accent:#215d80;--red:#bb2839;--red-d:#fff3f3;--green:#08764f;--green-d:#edf8f2;--amber:#945700;--amber-d:#fff5e5;--violet:#7046b4;--violet-d:#f5f0fc;--steel:#50687b;--steel-d:#f1f5f8;--mono:"Cascadia Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;--fs:clamp(12px,1.5vh,15px);--gap:clamp(8px,1.3vh,14px);--pad:clamp(11px,1.6vh,18px)}
 *{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--fg);font:var(--fs)/1.45 var(--sans);-webkit-font-smoothing:antialiased}button{font:inherit;cursor:pointer}button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.num,.v,.mini td:not(:first-child),.rd,.cnt{font-variant-numeric:tabular-nums}.num{font-family:var(--mono);letter-spacing:-.035em}
-.app{height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:clamp(10px,1.65vh,18px) clamp(14px,1.6vw,28px) 9px;gap:var(--gap)}
+.app{height:100dvh;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;padding:clamp(10px,1.65vh,18px) clamp(14px,1.6vw,28px) 9px;gap:var(--gap)}
 /* 顶栏：品牌、实时覆盖、提醒控制 */
 .top{display:flex;align-items:center;gap:clamp(16px,1.8vw,30px);padding-bottom:clamp(10px,1.4vh,15px);border-bottom:2px solid var(--navy);min-width:0}.brand{display:flex;align-items:center;gap:11px;flex:none}.logo{height:36px;width:36px;display:grid;place-items:center;background:var(--navy);color:#fff;border-radius:3px}.logo svg{height:25px;width:25px}.brand h1{margin:0;color:var(--ink);font-size:20px;font-weight:750;letter-spacing:.045em;line-height:1.2}.brand-sub{display:block;font:9px/1.6 var(--mono);letter-spacing:.18em;color:var(--muted);margin-top:3px}.chips{flex:1;display:flex;gap:5px 8px;flex-wrap:wrap;min-width:0}.chip{font-size:11px;line-height:1.7;white-space:nowrap;color:var(--fg2);padding:1px 7px;background:var(--panel2);border:1px solid transparent;border-radius:3px}.chip b{color:var(--ink);font-weight:650}.chip.warn{color:var(--amber);background:var(--amber-d);border-color:#efd5a9}.chip.err{color:var(--red);background:var(--red-d);border-color:#edc7cb}.live{width:6px;height:6px;display:inline-block;background:var(--accent);border-radius:50%;vertical-align:1px;margin-right:5px;box-shadow:0 0 0 3px #e1edf4}.live.off{background:var(--muted);box-shadow:none}#alert-btn{flex:none;min-height:34px;border:1px solid var(--navy);border-radius:3px;color:var(--navy);background:#fff;padding:6px 12px;font-size:12px;font-weight:650;white-space:nowrap;transition:background .15s,color .15s}#alert-btn:hover,#alert-btn[aria-pressed="true"]{background:var(--navy);color:#fff}
 /* 三栏工作区 */
@@ -240,6 +240,8 @@ try{window.__pre={};for(const n of['market_seed.json','regime_timeline.json','ov
 @media(max-width:860px){.board-card{padding-top:7px;padding-bottom:5px}.board-card h3{margin-bottom:2px}.board-card .bd{padding:4px 0}.os-inline{margin-top:2px;padding-top:4px}}
 
 /* 桌面左列：板块与外围并排，强弱和领涨表共用余下高度。 */
+.panel-toggle{display:none}
+.state-status{margin-top:5px}
 @media(min-width:861px){
   .c1{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr)}
   .c1>.hero,.c1>.fill{grid-column:1/-1}
@@ -284,6 +286,7 @@ try{window.__pre={};for(const n of['market_seed.json','regime_timeline.json','ov
   .c1 .panel-scroll .mini :is(th,td){line-height:1.25}
   .c1:has(>.state-card)>:is(.fill,.state-card) .mini :is(th,td){padding-inline:1px}
   .c1>.state-card .mini td{padding-block:2px}
+  .c1>.state-card .wide-table td:first-child{font-size:10px;line-height:1.2}
 }
 @media(min-width:861px) and (max-width:1180px) and (max-height:720px){
   .c2{overflow:auto;scrollbar-width:thin}
@@ -292,7 +295,7 @@ try{window.__pre={};for(const n of['market_seed.json','regime_timeline.json','ov
   .c2 .condition-card .ci{padding-block:1px}
 }
 
-/* 手机完整展示（2026-10-19 用户要求：手机端长度可以超过一屏，宽度不可以；展示全部内容）。放在样式最后，覆盖前面的一屏压缩规则 */
+/* 手机左列首屏预览，展开表格后随整页自然滚动。 */
 @media(max-width:860px){
   html,body{height:auto !important;overflow-x:clip !important;overflow-y:visible !important}
   .app{height:auto;min-height:100dvh;grid-template-rows:auto auto auto}
@@ -328,6 +331,34 @@ try{window.__pre={};for(const n of['market_seed.json','regime_timeline.json','ov
   .bd{grid-template-columns:minmax(0,1fr) auto auto !important}
   .bd.three{grid-template-columns:minmax(0,1fr) auto auto auto !important}
   .os-card{grid-template-columns:minmax(0,1fr) !important;row-gap:4px}
+  .c1{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .c1>:is(.hero,.board-card,.os-card),.c1:not(:has(>.state-card))>.fill,.c1:has(>.panel-open)>:is(.fill,.state-card){grid-column:1/-1}
+  .c1>.board-card .mid-hide,.c1>.board-card .bd .v small{display:none}
+  .c1>.board-card .mid-only{display:inline;white-space:normal}
+  .c1>.board-card .bd{grid-template-columns:minmax(0,1fr) auto auto 44px !important}
+  .c1>.board-card .bd.three{grid-template-columns:minmax(0,1fr) auto auto auto 44px !important}
+  .c1>.os-card h3{display:flex;gap:5px;margin:0;padding-right:0;border-right:0}
+  .c1>.os-card h3 .cnt{display:flex;gap:8px;white-space:normal}
+  .c1>.os-card h3 .cnt br{display:none}
+  .c1>.os-card .os-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}
+  .c1>.os-card .os{display:grid;grid-template-columns:minmax(0,1fr) auto 36px;gap:3px}
+  .c1>.os-card .os .nm{overflow:hidden;text-overflow:ellipsis}
+  .c1>.os-card .os .kspark{width:36px;height:15px}
+  .c1>:is(.fill,.state-card).desk-only{padding:6px 8px !important}
+  .c1>:is(.fill,.state-card) h3{margin-bottom:3px}
+  .c1>:is(.fill,.state-card) h3 .cnt{white-space:normal}
+  .panel-toggle{display:inline-flex;align-items:center;min-height:24px;margin-left:auto;padding:0 5px;border:1px solid var(--line2);border-radius:3px;background:var(--panel2);color:var(--accent);font-size:11px;white-space:nowrap}
+  .c1>:is(.fill,.state-card):not(.panel-open) h3 .cnt{display:none}
+  .c1>:is(.fill,.state-card):not(.panel-open) .mini :is(th,td){padding:1px;font-size:10px}
+  .c1>:is(.fill,.state-card):not(.panel-open) .mini tbody tr:nth-child(n+2),
+  .c1>.state-card:not(.panel-open) .wide-table :is(th,td):nth-child(n+4),
+  .c1>:is(.fill,.state-card):not(.panel-open) .panel-scroll:has(.mini)>:is(.note,.state-status){display:none}
+  .c1>.state-card:not(:has(.mini)) .panel-toggle{display:none}
+  /* 手机左列一律按视口宽收缩；长表格留在自己的滚动区里，不撑宽整页 */
+  .app>*{min-width:0}
+  .c1,.c1>section{min-width:0;max-width:100%}
+  .c1>.board-card .bd .kspark{width:44px !important;max-width:44px}
+  .opp,.opp .o,.opp .pm-hit{white-space:normal !important;overflow-wrap:anywhere;min-width:0}
 }
 
 /* ── 天枢主题（2026-10-27 D53；10-28 起只在天枢内嵌时生效，html.ts）：配色与动画与天枢一致，红涨绿跌不变；只覆盖颜色，不动布局。独立打开为白底 ── */
@@ -386,6 +417,6 @@ html.ts .pos-sug{border-radius:6px;background:color-mix(in srgb,var(--tone) 10%,
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261110a"></script>
+<script type="module" src="./js/app.js?v=20261110c"></script>
 </body>
 </html>
