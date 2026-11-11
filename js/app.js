@@ -947,30 +947,7 @@ function boardsHTML(f) {
 }
 /** 左列下部：桌面表格分别滚动，手机默认预览首行，可展开完整列表。 */
 function extraHTML(f) {
-  return sectorHTML(f) + stateCardHTML(f) + limitVolumeHTML();
-}
-/* 极限量池（个股层）：作为「机会」卡片独立展示，不再占用共振条件（2026-11-11 发起人）；
-   桌面与移动端都显示，未导入时只提示操作路径，不参与状态判定。 */
-function limitVolumeHTML() {
-  const lv = S.lv;
-  if (!lv) return '';
-  const note = lv.status === 'ok' || lv.status === 'stale' ? `${lv.count} 只${lv.status === 'stale' ? ' · 非当日' : ''}`
-    : lv.status === 'empty' ? '池内 0 只' : '未导入';
-  let body;
-  if (lv.status === 'missing') {
-    body = `<p class="muted state-status">${esc(lv.read)}</p>`
-      + '<p class="note">按 docs/极限量选股_同花顺公式.md 在同花顺跑公式 → 导出 CSV → 运行 tools/limit_volume.py 覆盖 data/limit_volume.json</p>';
-  } else if (lv.status === 'empty') {
-    body = `<p class="muted state-status">${esc(lv.read)}</p>`;
-  } else {
-    const rows = lv.stocks.slice(0, 12).map(s => `<tr><td>${esc(s.name)}<small>${esc(s.code)}</small></td>`
-      + `<td>${esc(FAMILY_LABEL[s.fam] ?? s.fam)}</td>`
-      + `<td class="r">${isNum(s.volRatio) ? s.volRatio.toFixed(1) + '×' : '—'}</td>`
-      + `<td class="r">${isNum(s.amt3d) ? fmtYi(s.amt3d * 1e4) : '—'}</td></tr>`).join('');
-    body = `<p class="muted state-status">${esc(lv.read)}</p>`
-      + `<table class="mini"><thead><tr><th>名称</th><th>族群</th><th>3日均量比</th><th>3日均额</th></tr></thead><tbody>${rows}</tbody></table>`;
-  }
-  return marketPanel('lv', '极限量机会', note, body, 'state-card');
+  return sectorHTML(f) + stateCardHTML(f);
 }
 function marketPanel(key, title, note, body, classes) {
   const open = S.xp?.[key] === true, id = `market-${key}`;
@@ -1115,11 +1092,6 @@ function oppHTML(extra = '') {
     if (pref) items.push(`<span class="o flat">情绪 · 龙头 ${esc(a.leader.name)}（${esc(labelBoard(a.leader.board))}）· 偏好不参与</span>`);
     else if (e.position === '半仓') items.push(`<span class="o up">情绪 · 情绪主升 龙头 ${esc(a.leader.name)}（${esc(labelBoard(a.leader.board))}）· 半仓，龙头见顶即观望</span>`);
     else items.push(`<span class="o flat">情绪 · 龙头 ${esc(a.leader.name)} ${esc(lt || '已见顶')} · 观望</span>`);
-  }
-  // 极限量池（个股层）：只在机构机会出现的阶段并列显示读数，不改变仓位档位
-  if (st === '主升' || st === '反弹') {
-    const c = lvChip(S.lv);
-    items.push(`<span class="o ${c.cls}">${esc(c.text)}</span>`);
   }
   if (extra && !items.length) return '';   // 手机端只在有机会时显示，替换首卡「按规则」一行
   const sug = extra ? posSugHTML(f) : '';
