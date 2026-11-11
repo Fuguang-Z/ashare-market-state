@@ -742,7 +742,6 @@ function condGroups(f) {
       [f.collective, '主线板块集体走强', '主线集体走强', famRead],
       [f.sync, '主线与指数同步上涨', '主线同步', syncRead],
       [f1v, '已完成二次探底', '二次探底', f.f1 ? `进度：${F1_STEPS.slice(0, f.f1).join(' → ')}` : '近期未出现超跌'],
-      [S.lv?.hit ?? null, '极限量个股出现（个股量能历史极值）', '极限量', S.lv?.read ?? '未接入当日选股结果'],
     ] },
     { key: 'down', title: '主跌条件', items: [
       [f.D1, '指数在 5 日线下，5 日线下拐', '破5日线', isNum(f.close) && isNum(f.m5) ? `上证 ${f.close.toFixed(2)}，MA5 ${f.m5.toFixed(2)}` : '未知'],
@@ -948,7 +947,30 @@ function boardsHTML(f) {
 }
 /** 左列下部：桌面表格分别滚动，手机默认预览首行，可展开完整列表。 */
 function extraHTML(f) {
-  return sectorHTML(f) + stateCardHTML(f);
+  return sectorHTML(f) + stateCardHTML(f) + limitVolumeHTML();
+}
+/* 极限量池（个股层）：作为「机会」卡片独立展示，不再占用共振条件（2026-11-11 发起人）；
+   桌面与移动端都显示，未导入时只提示操作路径，不参与状态判定。 */
+function limitVolumeHTML() {
+  const lv = S.lv;
+  if (!lv) return '';
+  const note = lv.status === 'ok' || lv.status === 'stale' ? `${lv.count} 只${lv.status === 'stale' ? ' · 非当日' : ''}`
+    : lv.status === 'empty' ? '池内 0 只' : '未导入';
+  let body;
+  if (lv.status === 'missing') {
+    body = `<p class="muted state-status">${esc(lv.read)}</p>`
+      + '<p class="note">按 docs/极限量选股_同花顺公式.md 在同花顺跑公式 → 导出 CSV → 运行 tools/limit_volume.py 覆盖 data/limit_volume.json</p>';
+  } else if (lv.status === 'empty') {
+    body = `<p class="muted state-status">${esc(lv.read)}</p>`;
+  } else {
+    const rows = lv.stocks.slice(0, 12).map(s => `<tr><td>${esc(s.name)}<small>${esc(s.code)}</small></td>`
+      + `<td>${esc(FAMILY_LABEL[s.fam] ?? s.fam)}</td>`
+      + `<td class="r">${isNum(s.volRatio) ? s.volRatio.toFixed(1) + '×' : '—'}</td>`
+      + `<td class="r">${isNum(s.amt3d) ? fmtYi(s.amt3d * 1e4) : '—'}</td></tr>`).join('');
+    body = `<p class="muted state-status">${esc(lv.read)}</p>`
+      + `<table class="mini"><thead><tr><th>名称</th><th>族群</th><th>3日均量比</th><th>3日均额</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  return marketPanel('lv', '极限量机会', note, body, 'state-card');
 }
 function marketPanel(key, title, note, body, classes) {
   const open = S.xp?.[key] === true, id = `market-${key}`;
