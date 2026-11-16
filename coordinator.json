@@ -1,1 +1,1 @@
-{"active":{"acquiredAt":1794821950.2935796,"date":"2026-11-16","expiresAt":1794822491.5319948,"owner":"f8bb665a8d5e4f34b8901cd11f910de2","route":"cloud","slot":"close"},"completed":{},"schema":1}
+{"active":null,"completed":{"2026-11-16/close":{"commit":"90fb88bff42b6042914248f048c38f9a29fedfc9","completedAt":1794822312.8856287,"route":"cloud"}},"schema":1}
