@@ -1,1 +1,1 @@
-{"active":null,"completed":{"2026-11-16/close":{"commit":"90fb88bff42b6042914248f048c38f9a29fedfc9","completedAt":1794822312.8856287,"route":"cloud"}},"schema":1}
+{"active":{"acquiredAt":1794907053.640548,"date":"2026-11-17","expiresAt":1794907233.640548,"owner":"5e065e17fc804fd09f373d81bdb3e5fe","route":"local","slot":"close"},"completed":{"2026-11-16/close":{"commit":"90fb88bff42b6042914248f048c38f9a29fedfc9","completedAt":1794822312.8856287,"route":"cloud"}},"schema":1}
