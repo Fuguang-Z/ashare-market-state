@@ -1,8 +1,8 @@
 /* ============================================================================
    云枢（天枢内嵌）视觉层 · v2026.11.11
    ----------------------------------------------------------------------------
-   只作用于 html.ts（?embed=tianshu 或被 iframe 嵌入时才有这个类）：
-   独立打开（白底原站）、桌面版「观势」、天枢其他板块都不加载这里的任何规则。
+   主题规则以 html.ts 为作用域（?embed=tianshu 或被 iframe 嵌入时才有这个类）；
+   041 起另有 max-width:860 的通用布局，白底独立页也载入；桌面版「观势」与天枢其他板块不受影响。
    配色沿用天枢令牌（--bg/--panel/--line 与天枢 site/style.css 同值），
    只重排字号、间距、层级、状态标记与细节，不改任何判定与数据逻辑。
    ============================================================================ */
@@ -524,4 +524,165 @@ html.ts .col{padding-right: 0;}
   html.ts #alert-btn{font-size: 11px; padding: 0 11px; min-height: 30px; border-radius: 9px;}
   /* 手机不受桌面「一屏」约束：整页自然滚动，表格不再渐隐 */
   html.ts .c1 .panel-scroll{-webkit-mask-image: none; mask-image: none;}
+}
+
+/* mobile-041 · public ASHARE only at <=860px; desktop >=861 untouched */
+@media (max-width: 860px) {
+  /* 顶栏：品牌独占一行，状态与提醒按钮排到下一行 */
+  :is(html.ts, html:not(.ts)) .top {
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    row-gap: 8px;
+    column-gap: 8px;
+  }
+  :is(html.ts, html:not(.ts)) .top > .brand {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  :is(html.ts, html:not(.ts)) .top > .brand > div {
+    min-width: 0;
+  }
+  :is(html.ts, html:not(.ts)) .top > .brand h1 {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  :is(html.ts, html:not(.ts)) .top .conn {
+    margin-left: 0;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+  }
+  :is(html.ts, html:not(.ts)) .top #alert-btn {
+    flex: 0 0 auto;
+    margin-left: auto;
+    max-width: 100%;
+  }
+  /* KPI 注记完整换行，不靠省略号或裁切 */
+  :is(html.ts, html:not(.ts)) .kpi {
+    min-width: 0;
+    height: auto;
+  }
+  :is(html.ts, html:not(.ts)) .kpi-note {
+    white-space: normal !important;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+  }
+  /* 外围指数名完整换行 */
+  :is(html.ts, html:not(.ts)) .os-card .os {
+    min-width: 0;
+    height: auto;
+  }
+  :is(html.ts, html:not(.ts)) .os-card .os .nm {
+    min-width: 0;
+    white-space: normal !important;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+  /* 时间线：父容器与子内容都按内容自然增高，取消 flex 收缩与渐隐 */
+  :is(html.ts, html:not(.ts)) .log-card {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  :is(html.ts, html:not(.ts)) .log-card .cl,
+  :is(html.ts, html:not(.ts)) .log-card .log-top,
+  :is(html.ts, html:not(.ts)) .log-card .tl2,
+  :is(html.ts, html:not(.ts)) .log-card .tl2 .tlcol,
+  :is(html.ts, html:not(.ts)) .log-card .log.tl,
+  :is(html.ts, html:not(.ts)) .log-card .log.tl li {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  :is(html.ts, html:not(.ts)) .log-card .tl2 {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: start;
+    gap: 8px;
+  }
+  :is(html.ts, html:not(.ts)) .log-card .log.tl {
+    display: block !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+  :is(html.ts, html:not(.ts)) .log-card .log.tl li {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  /* 展开后内容全量显示，不再被高度或渐隐截断 */
+  :is(html.ts, html:not(.ts)) .xp.open .more {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* 所有展开/收起控件保留可点区域，避免被后续条件卡覆盖 */
+  :is(html.ts, html:not(.ts)) button[data-xp],
+  :is(html.ts, html:not(.ts)) .xp-btn {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
+    min-height: 44px;
+    pointer-events: auto;
+  }
+}
+
+/* mobile-041 followup: public ASHARE toast, <=860 only; desktop untouched */
+@media (max-width: 860px) {
+  :is(html.ts, html:not(.ts)) #toast {
+    display: flex;
+    flex-direction: column;
+    height: auto !important;
+    max-height: min(70dvh, 420px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  :is(html.ts, html:not(.ts)) #toast strong {
+    display: block;
+    flex: 0 0 auto;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  :is(html.ts, html:not(.ts)) #toast p {
+    display: block !important;
+    flex: 0 0 auto;
+    margin: 6px 0 0 !important;
+    max-height: none !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    -webkit-line-clamp: unset !important;
+    -webkit-box-orient: initial !important;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  :is(html.ts, html:not(.ts)) #toast .toast-x {
+    order: -1;
+    position: sticky !important;
+    top: 6px;
+    right: auto !important;
+    align-self: flex-end;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    margin: 0 -36px 4px 0 !important;
+    z-index: 3;
+    pointer-events: auto;
+  }
+  :is(html.ts, html:not(.ts)) #toast .toast-ok { display: none !important; }
 }

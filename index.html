@@ -403,8 +403,8 @@ html.ts .pos-sug{border-radius:6px;background:color-mix(in srgb,var(--tone) 10%,
 /* 首屏预览（种子判定，实时数据未到）：说明用强调色 */
 .hero .sub .pv{color:var(--accent)}
 </style>
-<!-- 云枢（天枢内嵌）视觉层：全部规则以 html.ts 开头，独立打开/桌面版不生效（2026-11-11） -->
-<link rel="stylesheet" href="./css/ts-visual.css?v=20261111-visual1">
+<!-- 云枢（天枢内嵌）视觉层：既有 html.ts 主题，也含 041 起 max-width:860 的白底/嵌入通用布局；桌面保持原样（2026-11-17） -->
+<link rel="stylesheet" href="./css/ts-visual.css?v=20261117-mobile041">
 </head>
 <body>
 <div class="app">
@@ -419,6 +419,6 @@ html.ts .pos-sug{border-radius:6px;background:color-mix(in srgb,var(--tone) 10%,
 </div>
 <div id="toast" role="alert" hidden></div>
 <noscript>需要启用 JavaScript。</noscript>
-<script type="module" src="./js/app.js?v=20261111-lv2"></script>
+<script type="module" src="./js/app.js?v=20261117-mobile041"></script>
 </body>
 </html>

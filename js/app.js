@@ -2,12 +2,12 @@
  * 页面调度：每分钟一轮（上一轮未结束则跳过），取实时数据 → 拼接到历史 → 状态机试算 → 渲染 → 网页内提醒。
  * 原则：数据缺失就显示「未知」，不把缺失当成震荡，也不触发提醒。
  */
-import ds, { OVERSEAS } from './datasource.js?v=20261110a';
-import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261110a';
-import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261110a';
-import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261110a';
-import { indexStage, positionOf, RULE_TEXT } from './position.js?v=20261110a';
-import { readLimitVolume, lvChip } from './limit-volume.js?v=20261110d';
+import ds, { OVERSEAS } from './datasource.js?v=20261117-mobile041';
+import { replay, wilderRSI, FAMILIES, GATE_BOARDS, PARAMS, PREFERENCE_EXCLUDED, alertLevelAt, alertKey, themeTop } from './engine.js?v=20261117-mobile041';
+import { cycleReplay, cycleSegments, cyclePosition, emoAlertEvents, CYCLE_PARAMS, FAMILY_LABEL, labelBoard, splitThemes } from './cycle.js?v=20261117-mobile041';
+import { decodePools, decodeKline, featFromRows } from './seedpools.js?v=20261117-mobile041';
+import { indexStage, positionOf, RULE_TEXT } from './position.js?v=20261117-mobile041';
+import { readLimitVolume, lvChip } from './limit-volume.js?v=20261117-mobile041';
 
 const TICK_MS = 60000;
 const BOARDS_PER_TICK = 12;   // 同花顺板块实时：每轮 12 个（数据层同花顺请求间隔约 3 秒，约 36 秒；约 4 分钟轮完一圈，门槛指数排最前）
@@ -667,7 +667,7 @@ function showToast(title, body) {
 
 /* ---------------- 渲染 ---------------- */
 
-const APP_VERSION = '2026.11.10d';
+const APP_VERSION = '2026.11.17-mobile041';
 const STAGE_META = {
   '主升': { cls: 'up', name: '主升', sub: '主线板块与指数共振' },
   '反弹': { cls: 'rebound', name: '反弹', sub: '三大指数达到反弹门槛' },
